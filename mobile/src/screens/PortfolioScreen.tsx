@@ -16,6 +16,8 @@ import { useVaultStore } from '../store/useVaultStore';
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { formatEurc, formatEurcCompact } from '../lib/formatters';
+import { MiniSparkline } from '../components/charts/MiniSparkline';
+import { usePortfolioSparkline } from '../hooks/useChartData';
 
 export function PortfolioScreen() {
   const navigation = useNavigation<any>();
@@ -24,6 +26,7 @@ export function PortfolioScreen() {
   const selectVault = useVaultStore((s) => s.selectVault);
   const { vaults, totalStaked, totalPendingRewards, totalRewardsClaimed, refresh } =
     useVaultData();
+  const sparklineData = usePortfolioSparkline(7, totalStaked / 1_000_000 || 60000);
   const [refreshing, setRefreshing] = React.useState(false);
 
   const onRefresh = useCallback(async () => {
@@ -53,6 +56,10 @@ export function PortfolioScreen() {
       >
         <GlassCard style={styles.heroCard}>
           <BalanceHero amount={totalStaked} label="TOTAL STAKED" />
+
+          <View style={styles.sparklineContainer}>
+            <MiniSparkline data={sparklineData} height={50} width={280} />
+          </View>
 
           <View style={styles.statsRow}>
             <View style={styles.stat}>
@@ -121,6 +128,10 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     marginBottom: 24,
+  },
+  sparklineContainer: {
+    alignItems: 'center',
+    paddingVertical: 8,
   },
   statsRow: {
     flexDirection: 'row',

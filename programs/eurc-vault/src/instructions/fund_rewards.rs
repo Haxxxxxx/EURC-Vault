@@ -49,6 +49,7 @@ pub fn handler(ctx: Context<FundRewards>, amount: u64) -> Result<()> {
     let vault = &mut ctx.accounts.vault_config;
 
     require!(amount > 0, VaultError::ZeroRewardFund);
+    require!(vault.total_pb_eurc_supply > 0, VaultError::NoActiveStakers);
 
     // Transfer EURC from funder to vault
     token::transfer(
@@ -63,23 +64,28 @@ pub fn handler(ctx: Context<FundRewards>, amount: u64) -> Result<()> {
         amount,
     )?;
 
-    // Update accumulated_reward_per_share
-    vault.accumulated_reward_per_share = math::calculate_new_acc_reward_per_share(
-        vault.accumulated_reward_per_share,
-        amount,
-        vault.total_deposits,
-    )?;
-
-    vault.total_rewards_distributed = vault
-        .total_rewards_distributed
+    // Update vault EURC total — supply stays the same, so exchange rate grows
+    vault.total_eurc_in_vault = vault
+        .total_eurc_in_vault
         .checked_add(amount)
         .ok_or(VaultError::MathOverflow)?;
+
+    vault.total_rewards_funded = vault
+        .total_rewards_funded
+        .checked_add(amount)
+        .ok_or(VaultError::MathOverflow)?;
+
+    // Recalculate exchange rate
+    vault.exchange_rate = math::calculate_exchange_rate(
+        vault.total_eurc_in_vault,
+        vault.total_pb_eurc_supply,
+    )?;
 
     emit!(RewardsFunded {
         vault: vault.key(),
         funder: ctx.accounts.authority.key(),
         amount,
-        new_acc_reward_per_share: vault.accumulated_reward_per_share,
+        new_exchange_rate: vault.exchange_rate,
     });
 
     Ok(())

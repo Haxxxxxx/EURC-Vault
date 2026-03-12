@@ -1,66 +1,74 @@
-import { useEpochCountdown } from '@/hooks/useEpochCountdown';
-import { cn } from '@/lib/utils';
-import { EPOCH_DURATION } from '@/lib/constants';
+'use client';
 
-const STAGES = [
-  { label: 'Deposit', percent: 25 },
-  { label: 'Earning', percent: 50 },
-  { label: 'Rewards', percent: 75 },
-  { label: 'Distribution', percent: 100 },
+import { CheckCircle, Circle, Clock } from '@phosphor-icons/react';
+import { StaggerGrid, StaggerItem } from '@/components/motion/StaggerGrid';
+
+export interface EpochTimelineEntry {
+  number: number;
+  status: 'completed' | 'active' | 'upcoming';
+  date: string;
+}
+
+const DEFAULT_EPOCHS: EpochTimelineEntry[] = [
+  { number: 40, status: 'completed', date: 'Jan 15, 2026' },
+  { number: 41, status: 'completed', date: 'Jan 22, 2026' },
+  { number: 42, status: 'active', date: 'Feb 10, 2026' },
+  { number: 43, status: 'upcoming', date: 'Feb 17, 2026' },
+  { number: 44, status: 'upcoming', date: 'Feb 24, 2026' },
 ];
 
-export function EpochTimeline() {
-  const { secondsRemaining, epochNumber } = useEpochCountdown();
-  const currentPercent = ((EPOCH_DURATION - secondsRemaining) / EPOCH_DURATION) * 100;
+interface EpochTimelineProps {
+  epochs?: EpochTimelineEntry[];
+}
 
+export function EpochTimeline({ epochs = DEFAULT_EPOCHS }: EpochTimelineProps) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-foreground">Epoch #{epochNumber}</h4>
-        <span className="text-sm font-light text-foreground-secondary">
-          {Math.round(currentPercent)}% Complete
-        </span>
-      </div>
+    <div className="relative">
+      {/* Timeline Line */}
+      <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-border" />
 
-      <div className="relative">
-        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-0.5 bg-glass" />
-        <div
-          className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-primary transition-all duration-1000"
-          style={{ width: `${currentPercent}%` }}
-        />
-
-        <div className="relative flex items-center justify-between">
-          {STAGES.map((stage, index) => {
-            const isActive = currentPercent >= stage.percent;
-            const isCurrent = currentPercent < stage.percent && (index === 0 || currentPercent >= STAGES[index - 1].percent);
-
-            return (
-              <div key={stage.label} className="flex flex-col items-center">
-                <div
-                  className={cn(
-                    'w-3 h-3 rounded-full border-2 transition-all duration-300',
-                    isActive
-                      ? 'bg-primary border-primary'
-                      : isCurrent
-                      ? 'bg-primary/50 border-primary animate-pulse'
-                      : 'bg-background border-glass-border'
-                  )}
-                />
-                <span
-                  className={cn(
-                    'mt-2 text-xs font-light transition-colors',
-                    isActive || isCurrent
-                      ? 'text-foreground'
-                      : 'text-foreground-secondary'
-                  )}
-                >
-                  {stage.label}
-                </span>
+      <StaggerGrid stagger={0.08} className="space-y-6">
+        {epochs.map((epoch) => (
+          <StaggerItem key={epoch.number}>
+            <div className="relative flex items-start gap-4">
+              {/* Icon */}
+              <div className="relative z-10">
+                {epoch.status === 'completed' && (
+                  <CheckCircle className="w-12 h-12 text-accent" weight="fill" />
+                )}
+                {epoch.status === 'active' && (
+                  <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center">
+                    <Clock className="w-6 h-6 text-primary-foreground animate-pulse" />
+                  </div>
+                )}
+                {epoch.status === 'upcoming' && (
+                  <Circle className="w-12 h-12 text-muted-foreground" />
+                )}
               </div>
-            );
-          })}
-        </div>
-      </div>
+
+              {/* Content */}
+              <div className="flex-1 pt-2">
+                <div className="flex items-center justify-between mb-1">
+                  <h4 className="font-medium text-foreground">
+                    Epoch {epoch.number}
+                    {epoch.status === 'active' && (
+                      <span className="ml-2 px-2 py-0.5 text-xs bg-primary/20 text-primary rounded-full">
+                        Active
+                      </span>
+                    )}
+                  </h4>
+                  <span className="text-sm text-muted-foreground">{epoch.date}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {epoch.status === 'completed' && 'Rewards distributed'}
+                  {epoch.status === 'active' && 'Current staking period - rewards accruing'}
+                  {epoch.status === 'upcoming' && 'Upcoming staking period'}
+                </p>
+              </div>
+            </div>
+          </StaggerItem>
+        ))}
+      </StaggerGrid>
     </div>
   );
 }

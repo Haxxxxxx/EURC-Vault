@@ -3,7 +3,15 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { WalletProvider } from '@/providers/WalletProvider';
 import { ThemeProvider } from '@/providers/ThemeProvider';
+import { FirebaseAuthProvider } from '@/providers/FirebaseAuthProvider';
+import { VaultClientProvider } from '@/providers/VaultClientProvider';
+import { ToastProvider } from '@/providers/ToastProvider';
+import { ToastContainer } from '@/components/shared/ToastContainer';
 import { AppShell } from '@/components/layout/AppShell';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
+import { MotionConfigProvider } from '@/components/motion/MotionConfigProvider';
+import { RouteProgressProvider } from '@/providers/RouteProgressProvider';
+import { RouteProgressBar } from '@/components/layout/RouteProgressBar';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -25,9 +33,23 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.variable}>
         <ThemeProvider>
-          <WalletProvider>
-            <AppShell>{children}</AppShell>
-          </WalletProvider>
+          <MotionConfigProvider>
+            <WalletProvider>
+              <FirebaseAuthProvider>
+              <VaultClientProvider>
+                <ToastProvider>
+                  <RouteProgressProvider>
+                    <ErrorBoundary>
+                      <RouteProgressBar />
+                      <AppShell>{children}</AppShell>
+                    </ErrorBoundary>
+                  </RouteProgressProvider>
+                  <ToastContainer />
+                </ToastProvider>
+              </VaultClientProvider>
+              </FirebaseAuthProvider>
+            </WalletProvider>
+          </MotionConfigProvider>
         </ThemeProvider>
       </body>
     </html>

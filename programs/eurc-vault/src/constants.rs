@@ -10,6 +10,15 @@ pub const EPOCH_SEED: &[u8] = b"epoch";
 /// PDA seed for VaultAuthority (PDA that owns the token account)
 pub const VAULT_AUTHORITY_SEED: &[u8] = b"vault_authority";
 
+/// PDA seed for pbEURC mint (per-vault receipt token)
+pub const PB_EURC_MINT_SEED: &[u8] = b"pbeurc_mint";
+
+/// PDA seed for pbEURC mint authority
+pub const PB_EURC_MINT_AUTH_SEED: &[u8] = b"pbeurc_mint_auth";
+
+/// pbEURC decimals (matches EURC)
+pub const PB_EURC_DECIMALS: u8 = 6;
+
 /// EURC mint on mainnet (Circle)
 /// HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr
 pub const EURC_MINT_MAINNET: [u8; 32] = [
@@ -21,14 +30,17 @@ pub const EURC_MINT_MAINNET: [u8; 32] = [
 /// EURC decimals
 pub const EURC_DECIMALS: u8 = 6;
 
-/// Precision multiplier for accumulated_reward_per_share (10^12)
+/// Precision multiplier for exchange_rate (10^12)
 pub const PRECISION: u128 = 1_000_000_000_000;
+
+/// Initial exchange rate: 1 pbEURC = 1 EURC (scaled by PRECISION)
+pub const INITIAL_EXCHANGE_RATE: u128 = PRECISION;
 
 /// Default max vault capacity: 10,000,000 EURC = 10^13 base units
 pub const DEFAULT_MAX_CAPACITY: u64 = 10_000_000_000_000;
 
-/// Default epoch duration: 7 days in seconds
-pub const DEFAULT_EPOCH_DURATION: i64 = 7 * 24 * 60 * 60;
+/// Default epoch duration: 48 hours in seconds
+pub const DEFAULT_EPOCH_DURATION: i64 = 48 * 60 * 60;
 
 /// Default withdrawal cooldown: 1 day in seconds
 pub const DEFAULT_WITHDRAWAL_COOLDOWN: i64 = 24 * 60 * 60;

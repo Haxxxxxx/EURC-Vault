@@ -1,6 +1,5 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use anchor_spl::associated_token::AssociatedToken;
 
 use crate::constants::*;
 use crate::errors::VaultError;
@@ -20,7 +19,7 @@ pub struct InitializeVault<'info> {
         seeds = [VAULT_SEED, vault_id.to_le_bytes().as_ref()],
         bump,
     )]
-    pub vault_config: Account<'info, VaultConfig>,
+    pub vault_config: Box<Account<'info, VaultConfig>>,
 
     /// CHECK: PDA used as token account authority — validated by seeds
     #[account(
@@ -30,21 +29,36 @@ pub struct InitializeVault<'info> {
     pub vault_authority: UncheckedAccount<'info>,
 
     /// The EURC mint
-    pub eurc_mint: Account<'info, Mint>,
+    pub eurc_mint: Box<Account<'info, Mint>>,
 
-    /// Vault's EURC token account, owned by the vault_authority PDA
+    /// Vault's EURC token account — must be created client-side (ATA for vault_authority + eurc_mint)
+    #[account(
+        mut,
+        token::mint = eurc_mint,
+        token::authority = vault_authority,
+    )]
+    pub vault_token_account: Box<Account<'info, TokenAccount>>,
+
+    /// pbEURC receipt token mint (PDA per vault)
     #[account(
         init,
         payer = authority,
-        associated_token::mint = eurc_mint,
-        associated_token::authority = vault_authority,
+        mint::decimals = PB_EURC_DECIMALS,
+        mint::authority = pb_mint_authority,
+        seeds = [PB_EURC_MINT_SEED, vault_config.key().as_ref()],
+        bump,
     )]
-    pub vault_token_account: Account<'info, TokenAccount>,
+    pub pb_eurc_mint: Box<Account<'info, Mint>>,
+
+    /// CHECK: PDA used as pbEURC mint authority — validated by seeds
+    #[account(
+        seeds = [PB_EURC_MINT_AUTH_SEED, vault_config.key().as_ref()],
+        bump,
+    )]
+    pub pb_mint_authority: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-    pub rent: Sysvar<'info, Rent>,
 }
 
 pub fn handler(
@@ -69,22 +83,25 @@ pub fn handler(
     vault.eurc_mint = ctx.accounts.eurc_mint.key();
     vault.bump = ctx.bumps.vault_config;
     vault.authority_bump = ctx.bumps.vault_authority;
+    vault.pb_mint_auth_bump = ctx.bumps.pb_mint_authority;
     vault.paused = false;
     vault.max_capacity = max_capacity;
-    vault.total_deposits = 0;
-    vault.total_rewards_distributed = 0;
-    vault.accumulated_reward_per_share = 0;
+    vault.pb_eurc_mint = ctx.accounts.pb_eurc_mint.key();
+    vault.total_eurc_in_vault = 0;
+    vault.total_pb_eurc_supply = 0;
+    vault.total_rewards_funded = 0;
+    vault.exchange_rate = INITIAL_EXCHANGE_RATE;
     vault.current_epoch = 1;
     vault.epoch_duration = epoch_duration;
     vault.epoch_start_time = clock.unix_timestamp;
     vault.withdrawal_cooldown = withdrawal_cooldown;
     vault.staker_count = 0;
-    vault._reserved = [0u8; 128];
 
     emit!(VaultInitialized {
         vault_id,
         authority: ctx.accounts.authority.key(),
         eurc_mint: ctx.accounts.eurc_mint.key(),
+        pb_eurc_mint: ctx.accounts.pb_eurc_mint.key(),
         max_capacity,
         epoch_duration,
         withdrawal_cooldown,

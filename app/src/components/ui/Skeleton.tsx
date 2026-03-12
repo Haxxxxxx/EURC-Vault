@@ -18,12 +18,14 @@ export function Skeleton({ width, height, rounded = 'md', className, ...props }:
   return (
     <div
       className={cn(
-        'animate-pulse bg-glass border border-glass-border',
+        'relative overflow-hidden bg-glass border border-glass-border',
         roundedClasses[rounded],
         className
       )}
       style={{ width, height }}
       {...props}
-    />
+    >
+      <div className="absolute inset-0 skeleton-shimmer" />
+    </div>
   );
 }

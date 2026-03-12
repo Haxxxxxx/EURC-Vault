@@ -21,21 +21,29 @@ pub struct VaultConfig {
     /// PDA bump for the vault authority (token account owner)
     pub authority_bump: u8,
 
+    /// PDA bump for the pbEURC mint authority
+    pub pb_mint_auth_bump: u8,
+
     /// Whether the vault is paused (deposits blocked, withdrawals always allowed)
     pub paused: bool,
 
     /// Maximum EURC capacity in base units
     pub max_capacity: u64,
 
-    /// Total EURC currently deposited by all users (base units)
-    pub total_deposits: u64,
+    /// pbEURC receipt token mint (per-vault, PDA)
+    pub pb_eurc_mint: Pubkey,
 
-    /// Total rewards ever distributed (base units, for accounting)
-    pub total_rewards_distributed: u64,
+    /// Total EURC held in vault (deposits + funded rewards)
+    pub total_eurc_in_vault: u64,
 
-    /// Accumulated reward per share (u128, scaled by PRECISION = 10^12)
-    /// This is the MasterChef-style global accumulator
-    pub accumulated_reward_per_share: u128,
+    /// Total pbEURC supply minted
+    pub total_pb_eurc_supply: u64,
+
+    /// Cumulative rewards funded (analytics)
+    pub total_rewards_funded: u64,
+
+    /// Exchange rate: EURC per pbEURC, scaled by PRECISION (10^12). Starts at PRECISION (1:1)
+    pub exchange_rate: u128,
 
     /// Current epoch number (starts at 1)
     pub current_epoch: u64,
@@ -51,12 +59,9 @@ pub struct VaultConfig {
 
     /// Number of unique stakers
     pub staker_count: u64,
-
-    /// Reserved space for future upgrades
-    pub _reserved: [u8; 128],
 }
 
 impl VaultConfig {
-    /// Account size: 8 (discriminator) + fields
-    pub const LEN: usize = 8 + 8 + 32 + 32 + 32 + 1 + 1 + 1 + 8 + 8 + 8 + 16 + 8 + 8 + 8 + 8 + 8 + 128;
+    // 8 (disc) + 8 + 32 + 32 + 32 + 1 + 1 + 1 + 1 + 8 + 32 + 8 + 8 + 8 + 16 + 8 + 8 + 8 + 8 + 8
+    pub const LEN: usize = 8 + 8 + 32 + 32 + 32 + 1 + 1 + 1 + 1 + 8 + 32 + 8 + 8 + 8 + 16 + 8 + 8 + 8 + 8 + 8;
 }

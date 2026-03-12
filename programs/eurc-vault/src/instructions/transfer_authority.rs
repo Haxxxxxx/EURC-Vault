@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::VaultError;
+use crate::events::{AuthorityTransferInitiated, AuthorityTransferred};
 use crate::state::VaultConfig;
 
 /// Step 1: Current authority initiates transfer
@@ -36,9 +37,14 @@ pub fn initiate_handler(
     new_authority: Pubkey,
 ) -> Result<()> {
     let vault = &mut ctx.accounts.vault_config;
+    let current_authority = vault.authority;
     vault.pending_authority = new_authority;
 
-    msg!("Authority transfer initiated to: {}", new_authority);
+    emit!(AuthorityTransferInitiated {
+        vault: vault.key(),
+        current_authority,
+        new_authority,
+    });
 
     Ok(())
 }
@@ -55,10 +61,15 @@ pub fn accept_handler(ctx: Context<AcceptAuthorityTransfer>) -> Result<()> {
         VaultError::NotPendingAuthority
     );
 
+    let old_authority = vault.authority;
     vault.authority = vault.pending_authority;
     vault.pending_authority = Pubkey::default();
 
-    msg!("Authority transferred to: {}", vault.authority);
+    emit!(AuthorityTransferred {
+        vault: vault.key(),
+        old_authority,
+        new_authority: vault.authority,
+    });
 
     Ok(())
 }

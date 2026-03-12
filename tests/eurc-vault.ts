@@ -17,6 +17,7 @@ import { EurcVault } from "../target/types/eurc_vault";
 import {
   TestContext,
   ONE_EURC,
+  PRECISION,
   DEFAULT_EPOCH_DURATION,
   DEFAULT_COOLDOWN,
   DEFAULT_CAPACITY,
@@ -47,7 +48,7 @@ describe("EURC Vault", () => {
   // Initialize Vault
   // ────────────────────────────────────────────────────────────────────
   describe("Initialize Vault", () => {
-    it("creates a vault with valid config", async () => {
+    it("creates a vault with valid config and pbEURC mint", async () => {
       const id = nextVaultId();
       const ctx = await setupTestVault(program, provider, id);
 
@@ -57,12 +58,16 @@ describe("EURC Vault", () => {
         ctx.authority.publicKey.toBase58()
       );
       expect(vault.eurcMint.toBase58()).to.equal(ctx.eurcMint.toBase58());
+      expect(vault.pbEurcMint.toBase58()).to.equal(ctx.pbEurcMint.toBase58());
       expect(vault.maxCapacity.toNumber()).to.equal(DEFAULT_CAPACITY);
       expect(vault.epochDuration.toNumber()).to.equal(DEFAULT_EPOCH_DURATION);
       expect(vault.withdrawalCooldown.toNumber()).to.equal(DEFAULT_COOLDOWN);
       expect(vault.paused).to.be.false;
       expect(vault.currentEpoch.toNumber()).to.equal(1);
-      expect(vault.totalDeposits.toNumber()).to.equal(0);
+      expect(vault.totalEurcInVault.toNumber()).to.equal(0);
+      expect(vault.totalPbEurcSupply.toNumber()).to.equal(0);
+      expect(vault.totalRewardsFunded.toNumber()).to.equal(0);
+      expect(vault.exchangeRate.toString()).to.equal(PRECISION.toString());
       expect(vault.stakerCount.toNumber()).to.equal(0);
     });
 
@@ -91,43 +96,58 @@ describe("EURC Vault", () => {
       ctx = await setupTestVault(program, provider, nextVaultId());
     });
 
-    it("first deposit creates user_stake and updates vault", async () => {
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
+    it("first deposit mints pbEURC shares at 1:1 rate", async () => {
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
       const depositAmount = 100 * ONE_EURC;
 
-      await deposit(ctx, user, userTokenAccount, depositAmount);
+      await deposit(
+        ctx,
+        user,
+        userTokenAccount,
+        userPbTokenAccount,
+        depositAmount
+      );
 
+      // pbEURC balance = deposit amount (1:1 rate)
+      const pbBalance = await provider.connection.getTokenAccountBalance(
+        userPbTokenAccount
+      );
+      expect(Number(pbBalance.value.amount)).to.equal(depositAmount);
+
+      // user_stake initialized
       const [userStakePda] = findUserStakePda(
         ctx.vaultConfig,
         user.publicKey,
         program.programId
       );
       const stake = await program.account.userStake.fetch(userStakePda);
-      expect(stake.depositedAmount.toNumber()).to.equal(depositAmount);
       expect(stake.user.toBase58()).to.equal(user.publicKey.toBase58());
 
+      // Vault state
       const vault = await program.account.vaultConfig.fetch(ctx.vaultConfig);
-      expect(vault.totalDeposits.toNumber()).to.equal(depositAmount);
+      expect(vault.totalEurcInVault.toNumber()).to.equal(depositAmount);
+      expect(vault.totalPbEurcSupply.toNumber()).to.equal(depositAmount);
       expect(vault.stakerCount.toNumber()).to.equal(1);
+      expect(vault.exchangeRate.toString()).to.equal(PRECISION.toString());
 
       await checkVaultInvariant(ctx);
     });
 
     it("second deposit increments totals", async () => {
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 50 * ONE_EURC);
-      await deposit(ctx, user, userTokenAccount, 30 * ONE_EURC);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 50 * ONE_EURC);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 30 * ONE_EURC);
 
-      const [userStakePda] = findUserStakePda(
-        ctx.vaultConfig,
-        user.publicKey,
-        program.programId
+      const pbBalance = await provider.connection.getTokenAccountBalance(
+        userPbTokenAccount
       );
-      const stake = await program.account.userStake.fetch(userStakePda);
-      expect(stake.depositedAmount.toNumber()).to.equal(80 * ONE_EURC);
+      expect(Number(pbBalance.value.amount)).to.equal(80 * ONE_EURC);
 
       const vault = await program.account.vaultConfig.fetch(ctx.vaultConfig);
-      expect(vault.totalDeposits.toNumber()).to.equal(80 * ONE_EURC);
+      expect(vault.totalEurcInVault.toNumber()).to.equal(80 * ONE_EURC);
+      expect(vault.totalPbEurcSupply.toNumber()).to.equal(80 * ONE_EURC);
       // staker_count should still be 1 (same user)
       expect(vault.stakerCount.toNumber()).to.equal(1);
     });
@@ -136,18 +156,32 @@ describe("EURC Vault", () => {
       const user1 = await setupUserWithTokens(ctx);
       const user2 = await setupUserWithTokens(ctx);
 
-      await deposit(ctx, user1.user, user1.userTokenAccount, 50 * ONE_EURC);
-      await deposit(ctx, user2.user, user2.userTokenAccount, 75 * ONE_EURC);
+      await deposit(
+        ctx,
+        user1.user,
+        user1.userTokenAccount,
+        user1.userPbTokenAccount,
+        50 * ONE_EURC
+      );
+      await deposit(
+        ctx,
+        user2.user,
+        user2.userTokenAccount,
+        user2.userPbTokenAccount,
+        75 * ONE_EURC
+      );
 
       const vault = await program.account.vaultConfig.fetch(ctx.vaultConfig);
       expect(vault.stakerCount.toNumber()).to.equal(2);
-      expect(vault.totalDeposits.toNumber()).to.equal(125 * ONE_EURC);
+      expect(vault.totalEurcInVault.toNumber()).to.equal(125 * ONE_EURC);
+      expect(vault.totalPbEurcSupply.toNumber()).to.equal(125 * ONE_EURC);
     });
 
     it("rejects zero deposit", async () => {
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
       try {
-        await deposit(ctx, user, userTokenAccount, 0);
+        await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 0);
         expect.fail("Should have thrown");
       } catch (e: any) {
         expect(e.error?.errorCode?.code || e.message).to.contain("ZeroDeposit");
@@ -155,9 +189,10 @@ describe("EURC Vault", () => {
     });
 
     it("rejects deposit below minimum", async () => {
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
       try {
-        await deposit(ctx, user, userTokenAccount, 100); // 0.0001 EURC < 1 EURC min
+        await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100); // 0.0001 EURC < 1 EURC min
         expect.fail("Should have thrown");
       } catch (e: any) {
         expect(e.error?.errorCode?.code || e.message).to.contain(
@@ -176,10 +211,17 @@ describe("EURC Vault", () => {
         DEFAULT_COOLDOWN,
         10 * ONE_EURC // 10 EURC capacity
       );
-      const { user, userTokenAccount } = await setupUserWithTokens(tinyCtx);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(tinyCtx);
 
       try {
-        await deposit(tinyCtx, user, userTokenAccount, 11 * ONE_EURC);
+        await deposit(
+          tinyCtx,
+          user,
+          userTokenAccount,
+          userPbTokenAccount,
+          11 * ONE_EURC
+        );
         expect.fail("Should have thrown");
       } catch (e: any) {
         expect(e.error?.errorCode?.code || e.message).to.contain(
@@ -199,9 +241,16 @@ describe("EURC Vault", () => {
         .signers([ctx.authority])
         .rpc();
 
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
       try {
-        await deposit(ctx, user, userTokenAccount, 10 * ONE_EURC);
+        await deposit(
+          ctx,
+          user,
+          userTokenAccount,
+          userPbTokenAccount,
+          10 * ONE_EURC
+        );
         expect.fail("Should have thrown");
       } catch (e: any) {
         expect(e.error?.errorCode?.code || e.message).to.contain("VaultPaused");
@@ -213,10 +262,11 @@ describe("EURC Vault", () => {
   // Withdrawal
   // ────────────────────────────────────────────────────────────────────
   describe("Withdrawal", () => {
-    it("initiate withdrawal sets pending state", async () => {
+    it("initiate withdrawal burns shares and sets pending state", async () => {
       const ctx = await setupTestVault(program, provider, nextVaultId());
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100 * ONE_EURC);
 
       const [userStakePda] = findUserStakePda(
         ctx.vaultConfig,
@@ -230,19 +280,36 @@ describe("EURC Vault", () => {
           user: user.publicKey,
           vaultConfig: ctx.vaultConfig,
           userStake: userStakePda,
+          pbEurcMint: ctx.pbEurcMint,
+          userPbTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([user])
         .rpc();
 
       const stake = await program.account.userStake.fetch(userStakePda);
-      expect(stake.pendingWithdrawalAmount.toNumber()).to.equal(50 * ONE_EURC);
+      expect(stake.pendingWithdrawalEurc.toNumber()).to.equal(50 * ONE_EURC);
+      expect(stake.pendingWithdrawalShares.toNumber()).to.equal(50 * ONE_EURC); // 1:1 rate
       expect(stake.withdrawalAvailableAt.toNumber()).to.be.greaterThan(0);
+
+      // pbEURC balance reduced
+      const pbBalance = await provider.connection.getTokenAccountBalance(
+        userPbTokenAccount
+      );
+      expect(Number(pbBalance.value.amount)).to.equal(50 * ONE_EURC);
+
+      // Vault supply reduced
+      const vault = await program.account.vaultConfig.fetch(ctx.vaultConfig);
+      expect(vault.totalPbEurcSupply.toNumber()).to.equal(50 * ONE_EURC);
+
+      await checkVaultInvariant(ctx);
     });
 
-    it("rejects withdrawal exceeding balance", async () => {
+    it("rejects withdrawal exceeding shares balance", async () => {
       const ctx = await setupTestVault(program, provider, nextVaultId());
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100 * ONE_EURC);
 
       const [userStakePda] = findUserStakePda(
         ctx.vaultConfig,
@@ -257,21 +324,25 @@ describe("EURC Vault", () => {
             user: user.publicKey,
             vaultConfig: ctx.vaultConfig,
             userStake: userStakePda,
+            pbEurcMint: ctx.pbEurcMint,
+            userPbTokenAccount,
+            tokenProgram: TOKEN_PROGRAM_ID,
           })
           .signers([user])
           .rpc();
         expect.fail("Should have thrown");
       } catch (e: any) {
         expect(e.error?.errorCode?.code || e.message).to.contain(
-          "InsufficientBalance"
+          "InsufficientShares"
         );
       }
     });
 
     it("rejects duplicate pending withdrawal", async () => {
       const ctx = await setupTestVault(program, provider, nextVaultId());
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100 * ONE_EURC);
 
       const [userStakePda] = findUserStakePda(
         ctx.vaultConfig,
@@ -285,6 +356,9 @@ describe("EURC Vault", () => {
           user: user.publicKey,
           vaultConfig: ctx.vaultConfig,
           userStake: userStakePda,
+          pbEurcMint: ctx.pbEurcMint,
+          userPbTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([user])
         .rpc();
@@ -296,6 +370,9 @@ describe("EURC Vault", () => {
             user: user.publicKey,
             vaultConfig: ctx.vaultConfig,
             userStake: userStakePda,
+            pbEurcMint: ctx.pbEurcMint,
+            userPbTokenAccount,
+            tokenProgram: TOKEN_PROGRAM_ID,
           })
           .signers([user])
           .rpc();
@@ -307,10 +384,11 @@ describe("EURC Vault", () => {
       }
     });
 
-    it("cancel withdrawal clears pending state", async () => {
+    it("cancel withdrawal re-mints shares at current rate", async () => {
       const ctx = await setupTestVault(program, provider, nextVaultId());
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100 * ONE_EURC);
 
       const [userStakePda] = findUserStakePda(
         ctx.vaultConfig,
@@ -324,6 +402,9 @@ describe("EURC Vault", () => {
           user: user.publicKey,
           vaultConfig: ctx.vaultConfig,
           userStake: userStakePda,
+          pbEurcMint: ctx.pbEurcMint,
+          userPbTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([user])
         .rpc();
@@ -334,13 +415,26 @@ describe("EURC Vault", () => {
           user: user.publicKey,
           vaultConfig: ctx.vaultConfig,
           userStake: userStakePda,
+          pbEurcMint: ctx.pbEurcMint,
+          pbMintAuthority: ctx.pbMintAuthority,
+          userPbTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([user])
         .rpc();
 
       const stake = await program.account.userStake.fetch(userStakePda);
-      expect(stake.pendingWithdrawalAmount.toNumber()).to.equal(0);
+      expect(stake.pendingWithdrawalEurc.toNumber()).to.equal(0);
+      expect(stake.pendingWithdrawalShares.toNumber()).to.equal(0);
       expect(stake.withdrawalAvailableAt.toNumber()).to.equal(0);
+
+      // At 1:1 rate, should get back same number of shares
+      const pbBalance = await provider.connection.getTokenAccountBalance(
+        userPbTokenAccount
+      );
+      expect(Number(pbBalance.value.amount)).to.equal(100 * ONE_EURC);
+
+      await checkVaultInvariant(ctx);
     });
 
     it("instant withdrawal with zero cooldown", async () => {
@@ -351,8 +445,9 @@ describe("EURC Vault", () => {
         DEFAULT_EPOCH_DURATION,
         0 // zero cooldown
       );
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100 * ONE_EURC);
 
       const [userStakePda] = findUserStakePda(
         ctx.vaultConfig,
@@ -367,6 +462,9 @@ describe("EURC Vault", () => {
           user: user.publicKey,
           vaultConfig: ctx.vaultConfig,
           userStake: userStakePda,
+          pbEurcMint: ctx.pbEurcMint,
+          userPbTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([user])
         .rpc();
@@ -387,16 +485,22 @@ describe("EURC Vault", () => {
         .rpc();
 
       const stake = await program.account.userStake.fetch(userStakePda);
-      expect(stake.depositedAmount.toNumber()).to.equal(50 * ONE_EURC);
-      expect(stake.pendingWithdrawalAmount.toNumber()).to.equal(0);
+      expect(stake.pendingWithdrawalEurc.toNumber()).to.equal(0);
+
+      // Remaining pbEURC balance
+      const pbBalance = await provider.connection.getTokenAccountBalance(
+        userPbTokenAccount
+      );
+      expect(Number(pbBalance.value.amount)).to.equal(50 * ONE_EURC);
 
       const vault = await program.account.vaultConfig.fetch(ctx.vaultConfig);
-      expect(vault.totalDeposits.toNumber()).to.equal(50 * ONE_EURC);
+      expect(vault.totalEurcInVault.toNumber()).to.equal(50 * ONE_EURC);
+      expect(vault.totalPbEurcSupply.toNumber()).to.equal(50 * ONE_EURC);
 
       await checkVaultInvariant(ctx);
     });
 
-    it("full withdrawal decrements staker_count", async () => {
+    it("full withdrawal returns all EURC", async () => {
       const ctx = await setupTestVault(
         program,
         provider,
@@ -404,8 +508,9 @@ describe("EURC Vault", () => {
         DEFAULT_EPOCH_DURATION,
         0
       );
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100 * ONE_EURC);
 
       const [userStakePda] = findUserStakePda(
         ctx.vaultConfig,
@@ -420,6 +525,9 @@ describe("EURC Vault", () => {
           user: user.publicKey,
           vaultConfig: ctx.vaultConfig,
           userStake: userStakePda,
+          pbEurcMint: ctx.pbEurcMint,
+          userPbTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([user])
         .rpc();
@@ -439,31 +547,42 @@ describe("EURC Vault", () => {
         .rpc();
 
       const vault = await program.account.vaultConfig.fetch(ctx.vaultConfig);
-      expect(vault.stakerCount.toNumber()).to.equal(0);
-      expect(vault.totalDeposits.toNumber()).to.equal(0);
+      expect(vault.totalEurcInVault.toNumber()).to.equal(0);
+      expect(vault.totalPbEurcSupply.toNumber()).to.equal(0);
+
+      // User should have all EURC back (1000 EURC initial funding)
+      const eurcBalance = await provider.connection.getTokenAccountBalance(
+        userTokenAccount
+      );
+      expect(Number(eurcBalance.value.amount)).to.equal(1000 * ONE_EURC);
+
+      await checkVaultInvariant(ctx);
     });
   });
 
   // ────────────────────────────────────────────────────────────────────
-  // Rewards
+  // Exchange Rate & Rewards
   // ────────────────────────────────────────────────────────────────────
-  describe("Rewards", () => {
-    it("fund_rewards updates accumulated_reward_per_share", async () => {
+  describe("Exchange Rate & Rewards", () => {
+    it("fund_rewards increases exchange_rate", async () => {
       const ctx = await setupTestVault(program, provider, nextVaultId());
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100 * ONE_EURC);
 
       await fundRewards(ctx, 10 * ONE_EURC);
 
       const vault = await program.account.vaultConfig.fetch(ctx.vaultConfig);
-      expect(vault.totalRewardsDistributed.toNumber()).to.equal(10 * ONE_EURC);
-      // acc = 10_000_000 * 10^12 / 100_000_000 = 100_000_000_000
-      expect(
-        vault.accumulatedRewardPerShare.toString()
-      ).to.equal("100000000000");
+      expect(vault.totalRewardsFunded.toNumber()).to.equal(10 * ONE_EURC);
+      expect(vault.totalEurcInVault.toNumber()).to.equal(110 * ONE_EURC);
+      expect(vault.totalPbEurcSupply.toNumber()).to.equal(100 * ONE_EURC);
+      // exchange_rate = 110_000_000 * 10^12 / 100_000_000 = 1_100_000_000_000
+      expect(vault.exchangeRate.toString()).to.equal("1100000000000");
+
+      await checkVaultInvariant(ctx);
     });
 
-    it("claim_rewards transfers correct amount", async () => {
+    it("deposit at higher rate gets fewer shares", async () => {
       const ctx = await setupTestVault(
         program,
         provider,
@@ -471,46 +590,42 @@ describe("EURC Vault", () => {
         DEFAULT_EPOCH_DURATION,
         0
       );
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
 
-      // Fund 10 EURC in rewards
+      // User A deposits 100 EURC at 1:1 rate
+      const userA = await setupUserWithTokens(ctx);
+      await deposit(
+        ctx,
+        userA.user,
+        userA.userTokenAccount,
+        userA.userPbTokenAccount,
+        100 * ONE_EURC
+      );
+
+      // Fund 10 EURC rewards → rate = 1.1x
       await fundRewards(ctx, 10 * ONE_EURC);
 
-      const [userStakePda] = findUserStakePda(
-        ctx.vaultConfig,
-        user.publicKey,
-        program.programId
+      // User B deposits 100 EURC at 1.1x rate — should get fewer shares
+      const userB = await setupUserWithTokens(ctx);
+      await deposit(
+        ctx,
+        userB.user,
+        userB.userTokenAccount,
+        userB.userPbTokenAccount,
+        100 * ONE_EURC
       );
 
-      // Check token balance before claim
-      const balBefore = await provider.connection.getTokenAccountBalance(
-        userTokenAccount
+      const balA = await provider.connection.getTokenAccountBalance(
+        userA.userPbTokenAccount
+      );
+      const balB = await provider.connection.getTokenAccountBalance(
+        userB.userPbTokenAccount
       );
 
-      await program.methods
-        .claimRewards()
-        .accounts({
-          user: user.publicKey,
-          vaultConfig: ctx.vaultConfig,
-          userStake: userStakePda,
-          vaultAuthority: ctx.vaultAuthority,
-          vaultTokenAccount: ctx.vaultTokenAccount,
-          userTokenAccount,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([user])
-        .rpc();
-
-      const balAfter = await provider.connection.getTokenAccountBalance(
-        userTokenAccount
-      );
-      const claimed =
-        Number(balAfter.value.amount) - Number(balBefore.value.amount);
-      expect(claimed).to.equal(10 * ONE_EURC);
-
-      const stake = await program.account.userStake.fetch(userStakePda);
-      expect(stake.totalRewardsClaimed.toNumber()).to.equal(10 * ONE_EURC);
+      // A has 100M shares (deposited at 1:1)
+      expect(Number(balA.value.amount)).to.equal(100 * ONE_EURC);
+      // B gets fewer shares: 100_000_000 * 10^12 / 1_100_000_000_000 ≈ 90_909_090
+      expect(Number(balB.value.amount)).to.be.lessThan(100 * ONE_EURC);
+      expect(Number(balB.value.amount)).to.be.closeTo(90_909_090, 10);
 
       await checkVaultInvariant(ctx);
     });
@@ -528,29 +643,65 @@ describe("EURC Vault", () => {
       const userA = await setupUserWithTokens(ctx);
       const userB = await setupUserWithTokens(ctx);
 
-      await deposit(ctx, userA.user, userA.userTokenAccount, 75 * ONE_EURC);
-      await deposit(ctx, userB.user, userB.userTokenAccount, 25 * ONE_EURC);
+      await deposit(
+        ctx,
+        userA.user,
+        userA.userTokenAccount,
+        userA.userPbTokenAccount,
+        75 * ONE_EURC
+      );
+      await deposit(
+        ctx,
+        userB.user,
+        userB.userTokenAccount,
+        userB.userPbTokenAccount,
+        25 * ONE_EURC
+      );
 
-      // Fund 100 EURC in rewards
+      // At 1:1 rate: A = 75M shares, B = 25M shares
+      const balA = await provider.connection.getTokenAccountBalance(
+        userA.userPbTokenAccount
+      );
+      const balB = await provider.connection.getTokenAccountBalance(
+        userB.userPbTokenAccount
+      );
+      expect(Number(balA.value.amount)).to.equal(75 * ONE_EURC);
+      expect(Number(balB.value.amount)).to.equal(25 * ONE_EURC);
+
+      // Fund 100 EURC in rewards — rate doubles to 2x
       await fundRewards(ctx, 100 * ONE_EURC);
 
-      // Claim for both
+      const vault = await program.account.vaultConfig.fetch(ctx.vaultConfig);
+      // rate = (75 + 25 + 100) * 10^12 / 100 = 2 * 10^12
+      expect(vault.exchangeRate.toString()).to.equal("2000000000000");
+
+      // A's 75M shares at 2x rate = 150 EURC value (75 deposit + 75 reward share)
+      // Verify by withdrawing
       const [stakeA] = findUserStakePda(
         ctx.vaultConfig,
         userA.user.publicKey,
         program.programId
       );
-      const [stakeB] = findUserStakePda(
-        ctx.vaultConfig,
-        userB.user.publicKey,
-        program.programId
-      );
 
-      const balABefore = await provider.connection.getTokenAccountBalance(
+      const eurcBalABefore = await provider.connection.getTokenAccountBalance(
         userA.userTokenAccount
       );
+
       await program.methods
-        .claimRewards()
+        .initiateWithdrawal(new anchor.BN(150 * ONE_EURC))
+        .accounts({
+          user: userA.user.publicKey,
+          vaultConfig: ctx.vaultConfig,
+          userStake: stakeA,
+          pbEurcMint: ctx.pbEurcMint,
+          userPbTokenAccount: userA.userPbTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .signers([userA.user])
+        .rpc();
+
+      await program.methods
+        .completeWithdrawal()
         .accounts({
           user: userA.user.publicKey,
           vaultConfig: ctx.vaultConfig,
@@ -562,97 +713,28 @@ describe("EURC Vault", () => {
         })
         .signers([userA.user])
         .rpc();
-      const balAAfter = await provider.connection.getTokenAccountBalance(
+
+      const eurcBalAAfter = await provider.connection.getTokenAccountBalance(
         userA.userTokenAccount
       );
-      const claimedA =
-        Number(balAAfter.value.amount) - Number(balABefore.value.amount);
-
-      const balBBefore = await provider.connection.getTokenAccountBalance(
-        userB.userTokenAccount
-      );
-      await program.methods
-        .claimRewards()
-        .accounts({
-          user: userB.user.publicKey,
-          vaultConfig: ctx.vaultConfig,
-          userStake: stakeB,
-          vaultAuthority: ctx.vaultAuthority,
-          vaultTokenAccount: ctx.vaultTokenAccount,
-          userTokenAccount: userB.userTokenAccount,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([userB.user])
-        .rpc();
-      const balBAfter = await provider.connection.getTokenAccountBalance(
-        userB.userTokenAccount
-      );
-      const claimedB =
-        Number(balBAfter.value.amount) - Number(balBBefore.value.amount);
-
-      // A should get 75%, B should get 25%
-      expect(claimedA).to.equal(75 * ONE_EURC);
-      expect(claimedB).to.equal(25 * ONE_EURC);
+      const receivedA =
+        Number(eurcBalAAfter.value.amount) -
+        Number(eurcBalABefore.value.amount);
+      // A should get 150 EURC (75 deposit + 75 from rewards)
+      expect(receivedA).to.equal(150 * ONE_EURC);
     });
 
-    it("mid-epoch deposit doesn't earn retroactive rewards", async () => {
-      const ctx = await setupTestVault(
-        program,
-        provider,
-        nextVaultId(),
-        DEFAULT_EPOCH_DURATION,
-        0
-      );
-
-      // User A deposits first
-      const userA = await setupUserWithTokens(ctx);
-      await deposit(ctx, userA.user, userA.userTokenAccount, 100 * ONE_EURC);
-
-      // Fund rewards (all go to A's accumulator)
-      await fundRewards(ctx, 50 * ONE_EURC);
-
-      // User B deposits AFTER rewards — should not earn them retroactively
-      const userB = await setupUserWithTokens(ctx);
-      await deposit(ctx, userB.user, userB.userTokenAccount, 100 * ONE_EURC);
-
-      const [stakeB] = findUserStakePda(
-        ctx.vaultConfig,
-        userB.user.publicKey,
-        program.programId
-      );
-
-      // B should have 0 pending rewards
-      try {
-        await program.methods
-          .claimRewards()
-          .accounts({
-            user: userB.user.publicKey,
-            vaultConfig: ctx.vaultConfig,
-            userStake: stakeB,
-            vaultAuthority: ctx.vaultAuthority,
-            vaultTokenAccount: ctx.vaultTokenAccount,
-            userTokenAccount: userB.userTokenAccount,
-            tokenProgram: TOKEN_PROGRAM_ID,
-          })
-          .signers([userB.user])
-          .rpc();
-        expect.fail("Should have thrown NoRewardsToClaim");
-      } catch (e: any) {
-        expect(e.error?.errorCode?.code || e.message).to.contain(
-          "NoRewardsToClaim"
-        );
-      }
-    });
-
-    it("no rewards when no deposits", async () => {
+    it("rejects fund_rewards when no stakers", async () => {
       const ctx = await setupTestVault(program, provider, nextVaultId());
 
-      // Fund rewards with zero deposits
-      await fundRewards(ctx, 10 * ONE_EURC);
-
-      // acc_reward_per_share should remain 0
-      const vault = await program.account.vaultConfig.fetch(ctx.vaultConfig);
-      expect(vault.accumulatedRewardPerShare.toString()).to.equal("0");
+      try {
+        await fundRewards(ctx, 10 * ONE_EURC);
+        expect.fail("Should have thrown");
+      } catch (e: any) {
+        expect(e.error?.errorCode?.code || e.message).to.contain(
+          "NoActiveStakers"
+        );
+      }
     });
   });
 
@@ -690,10 +772,11 @@ describe("EURC Vault", () => {
         DEFAULT_EPOCH_DURATION,
         0
       );
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
 
       // Deposit before pausing
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100 * ONE_EURC);
 
       // Pause
       await program.methods
@@ -710,7 +793,13 @@ describe("EURC Vault", () => {
 
       // Deposit should fail
       try {
-        await deposit(ctx, user, userTokenAccount, 10 * ONE_EURC);
+        await deposit(
+          ctx,
+          user,
+          userTokenAccount,
+          userPbTokenAccount,
+          10 * ONE_EURC
+        );
         expect.fail("Should have thrown");
       } catch (e: any) {
         expect(e.error?.errorCode?.code || e.message).to.contain("VaultPaused");
@@ -729,6 +818,9 @@ describe("EURC Vault", () => {
           user: user.publicKey,
           vaultConfig: ctx.vaultConfig,
           userStake: userStakePda,
+          pbEurcMint: ctx.pbEurcMint,
+          userPbTokenAccount,
+          tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([user])
         .rpc();
@@ -748,8 +840,11 @@ describe("EURC Vault", () => {
         .signers([user])
         .rpc();
 
-      const stake = await program.account.userStake.fetch(userStakePda);
-      expect(stake.depositedAmount.toNumber()).to.equal(50 * ONE_EURC);
+      // Remaining pbEURC balance
+      const pbBalance = await provider.connection.getTokenAccountBalance(
+        userPbTokenAccount
+      );
+      expect(Number(pbBalance.value.amount)).to.equal(50 * ONE_EURC);
     });
 
     it("unauthorized user cannot call admin functions", async () => {
@@ -828,8 +923,9 @@ describe("EURC Vault", () => {
         0
       );
 
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100 * ONE_EURC);
 
       // Wait for epoch to end
       await sleep(2000);
@@ -853,7 +949,9 @@ describe("EURC Vault", () => {
 
       const snapshot = await program.account.epochSnapshot.fetch(snapshotPda);
       expect(snapshot.epochNumber.toNumber()).to.equal(1);
-      expect(snapshot.totalDeposits.toNumber()).to.equal(100 * ONE_EURC);
+      expect(snapshot.totalEurcInVault.toNumber()).to.equal(100 * ONE_EURC);
+      expect(snapshot.totalPbEurcSupply.toNumber()).to.equal(100 * ONE_EURC);
+      expect(snapshot.exchangeRate.toString()).to.equal(PRECISION.toString());
 
       const vault = await program.account.vaultConfig.fetch(ctx.vaultConfig);
       expect(vault.currentEpoch.toNumber()).to.equal(2);
@@ -864,7 +962,7 @@ describe("EURC Vault", () => {
         program,
         provider,
         nextVaultId(),
-        DEFAULT_EPOCH_DURATION, // 7 days
+        DEFAULT_EPOCH_DURATION, // 48 hours
         0
       );
 
@@ -906,8 +1004,9 @@ describe("EURC Vault", () => {
         DEFAULT_EPOCH_DURATION,
         DEFAULT_COOLDOWN
       );
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100 * ONE_EURC);
 
       // Pause
       await program.methods
@@ -938,6 +1037,8 @@ describe("EURC Vault", () => {
           vaultAuthority: ctx.vaultAuthority,
           vaultTokenAccount: ctx.vaultTokenAccount,
           userTokenAccount,
+          pbEurcMint: ctx.pbEurcMint,
+          userPbTokenAccount,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([user])
@@ -950,17 +1051,21 @@ describe("EURC Vault", () => {
         Number(balAfter.value.amount) - Number(balBefore.value.amount);
       expect(recovered).to.equal(100 * ONE_EURC);
 
-      const stake = await program.account.userStake.fetch(userStakePda);
-      expect(stake.depositedAmount.toNumber()).to.equal(0);
+      // pbEURC balance should be 0
+      const pbBalance = await provider.connection.getTokenAccountBalance(
+        userPbTokenAccount
+      );
+      expect(Number(pbBalance.value.amount)).to.equal(0);
 
       const vault = await program.account.vaultConfig.fetch(ctx.vaultConfig);
-      expect(vault.totalDeposits.toNumber()).to.equal(0);
+      expect(vault.totalEurcInVault.toNumber()).to.equal(0);
+      expect(vault.totalPbEurcSupply.toNumber()).to.equal(0);
       expect(vault.stakerCount.toNumber()).to.equal(0);
 
       await checkVaultInvariant(ctx);
     });
 
-    it("withdraws deposit + pending rewards", async () => {
+    it("returns share value after exchange rate growth", async () => {
       const ctx = await setupTestVault(
         program,
         provider,
@@ -968,10 +1073,12 @@ describe("EURC Vault", () => {
         DEFAULT_EPOCH_DURATION,
         DEFAULT_COOLDOWN
       );
-      const { user, userTokenAccount } = await setupUserWithTokens(ctx);
-      await deposit(ctx, user, userTokenAccount, 100 * ONE_EURC);
+      const { user, userTokenAccount, userPbTokenAccount } =
+        await setupUserWithTokens(ctx);
+      await deposit(ctx, user, userTokenAccount, userPbTokenAccount, 100 * ONE_EURC);
 
-      // Fund 20 EURC in rewards
+      // Fund 20 EURC in rewards → rate = 1.2x
+      // shares_to_eurc(100M, 1.2 * 10^12) = 100M * 1.2 * 10^12 / 10^12 = 120M
       await fundRewards(ctx, 20 * ONE_EURC);
 
       const [userStakePda] = findUserStakePda(
@@ -993,6 +1100,8 @@ describe("EURC Vault", () => {
           vaultAuthority: ctx.vaultAuthority,
           vaultTokenAccount: ctx.vaultTokenAccount,
           userTokenAccount,
+          pbEurcMint: ctx.pbEurcMint,
+          userPbTokenAccount,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .signers([user])

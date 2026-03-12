@@ -1,13 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Badge } from '@/components/ui/Badge';
 import { formatEurcDisplay, formatTimestamp, truncateAddress } from '@/lib/utils';
 import { EURC_DECIMALS, TRANSACTION_TYPES, TRANSACTION_STATUS } from '@/lib/constants';
-import { ExternalLink, ArrowDownLeft, ArrowUpRight, Gift, Clock, XCircle } from 'lucide-react';
+import {
+  ArrowSquareOut,
+  ArrowDownLeft,
+  ArrowUpRight,
 
-interface Transaction {
+  Clock,
+  XCircle,
+} from '@phosphor-icons/react';
+
+export interface Transaction {
   id: string;
   type: keyof typeof TRANSACTION_TYPES;
   amount: number;
@@ -15,9 +22,14 @@ interface Transaction {
   status: keyof typeof TRANSACTION_STATUS;
   signature: string;
   vaultName: string;
+  vaultSlug?: string;
 }
 
-const MOCK_TRANSACTIONS: Transaction[] = [
+interface TransactionTableProps {
+  transactions: Transaction[];
+}
+
+export const MOCK_TRANSACTIONS: Transaction[] = [
   {
     id: '1',
     type: 'DEPOSIT',
@@ -26,15 +38,6 @@ const MOCK_TRANSACTIONS: Transaction[] = [
     status: 'CONFIRMED',
     signature: '5j7s8K9mN2pQ3rT4uV5wX6yZ7A8B9C0D1E2F3G4H5',
     vaultName: 'Standard Vault',
-  },
-  {
-    id: '2',
-    type: 'REWARD_CLAIM',
-    amount: 125.5 * Math.pow(10, EURC_DECIMALS),
-    timestamp: Date.now() - 24 * 60 * 60 * 1000,
-    status: 'CONFIRMED',
-    signature: '3K4L5M6N7O8P9Q0R1S2T3U4V5W6X7Y8Z9A0B1C2D3',
-    vaultName: 'Premium Vault',
   },
   {
     id: '3',
@@ -68,7 +71,6 @@ const MOCK_TRANSACTIONS: Transaction[] = [
 const TRANSACTION_ICONS = {
   DEPOSIT: ArrowDownLeft,
   WITHDRAW: ArrowUpRight,
-  REWARD_CLAIM: Gift,
   COOLDOWN_STARTED: Clock,
   COOLDOWN_CANCELLED: XCircle,
 };
@@ -76,17 +78,19 @@ const TRANSACTION_ICONS = {
 const TRANSACTION_LABELS = {
   DEPOSIT: 'Deposit',
   WITHDRAW: 'Withdrawal',
-  REWARD_CLAIM: 'Reward Claim',
   COOLDOWN_STARTED: 'Cooldown Started',
   COOLDOWN_CANCELLED: 'Cooldown Cancelled',
 };
 
-export function TransactionTable() {
+export function TransactionTable({ transactions }: TransactionTableProps) {
   const [filter, setFilter] = useState<string>('all');
 
-  const filteredTransactions = filter === 'all'
-    ? MOCK_TRANSACTIONS
-    : MOCK_TRANSACTIONS.filter((tx) => TRANSACTION_TYPES[tx.type] === filter);
+  const filteredTransactions = useMemo(
+    () => filter === 'all'
+      ? transactions
+      : transactions.filter((tx) => TRANSACTION_TYPES[tx.type] === filter),
+    [transactions, filter],
+  );
 
   return (
     <GlassCard padding="none">
@@ -153,67 +157,75 @@ export function TransactionTable() {
             </tr>
           </thead>
           <tbody>
-            {filteredTransactions.map((tx, index) => {
-              const Icon = TRANSACTION_ICONS[tx.type];
-              const isPositive = tx.type === 'DEPOSIT' || tx.type === 'REWARD_CLAIM';
+            {filteredTransactions.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-12 text-center text-foreground-secondary font-light">
+                  No transactions found
+                </td>
+              </tr>
+            ) : (
+              filteredTransactions.map((tx, index) => {
+                const Icon = TRANSACTION_ICONS[tx.type];
+                const isPositive = tx.type === 'DEPOSIT';
 
-              return (
-                <tr
-                  key={tx.id}
-                  className={`${
-                    index !== filteredTransactions.length - 1 ? 'border-b border-glass-border' : ''
-                  } hover:bg-white/5 transition-colors`}
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${
-                        isPositive ? 'bg-success/10' : 'bg-foreground-secondary/10'
-                      }`}>
-                        <Icon className={`w-4 h-4 ${
-                          isPositive ? 'text-success' : 'text-foreground-secondary'
-                        }`} />
+                return (
+                  <tr
+                    key={tx.id}
+                    className={`${
+                      index !== filteredTransactions.length - 1 ? 'border-b border-glass-border' : ''
+                    } hover:bg-white/5 transition-colors`}
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${
+                          isPositive ? 'bg-success/10' : 'bg-foreground-secondary/10'
+                        }`}>
+                          <Icon className={`w-4 h-4 ${
+                            isPositive ? 'text-success' : 'text-foreground-secondary'
+                          }`} weight="bold" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">
+                          {TRANSACTION_LABELS[tx.type]}
+                        </span>
                       </div>
-                      <span className="text-sm font-medium text-foreground">
-                        {TRANSACTION_LABELS[tx.type]}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm font-light text-foreground-secondary">
+                        {tx.vaultName}
                       </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-light text-foreground-secondary">
-                      {tx.vaultName}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span className={`text-sm font-medium ${
-                      isPositive ? 'text-success' : 'text-foreground'
-                    }`}>
-                      {isPositive ? '+' : ''}{formatEurcDisplay(tx.amount, EURC_DECIMALS)} EURC
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-light text-foreground-secondary">
-                      {formatTimestamp(tx.timestamp)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={tx.status === 'CONFIRMED' ? 'success' : 'warning'}>
-                      {tx.status === 'CONFIRMED' ? 'Confirmed' : 'Pending'}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <a
-                      href={`https://solscan.io/tx/${tx.signature}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-sm font-light text-primary hover:text-primary-hover transition-colors"
-                    >
-                      {truncateAddress(tx.signature, 6, 6)}
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </td>
-                </tr>
-              );
-            })}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <span className={`text-sm font-medium ${
+                        isPositive ? 'text-success' : 'text-foreground'
+                      }`}>
+                        {isPositive ? '+' : ''}{formatEurcDisplay(tx.amount, EURC_DECIMALS)} EURC
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm font-light text-foreground-secondary">
+                        {formatTimestamp(tx.timestamp)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Badge variant={tx.status === 'CONFIRMED' ? 'success' : 'warning'}>
+                        {tx.status === 'CONFIRMED' ? 'Confirmed' : 'Pending'}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <a
+                        href={`https://solscan.io/tx/${tx.signature}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-sm font-light text-primary hover:text-primary-hover transition-colors"
+                      >
+                        {truncateAddress(tx.signature, 6, 6)}
+                        <ArrowSquareOut className="w-3 h-3" weight="bold" />
+                      </a>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>

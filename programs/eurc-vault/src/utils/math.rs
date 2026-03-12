@@ -1,66 +1,55 @@
 use crate::errors::VaultError;
 use crate::constants::PRECISION;
 
-/// Calculate pending rewards for a user using MasterChef formula:
-/// pending = (deposited_amount * acc_reward_per_share / PRECISION) - reward_debt
-pub fn calculate_pending_rewards(
-    deposited_amount: u64,
-    accumulated_reward_per_share: u128,
-    reward_debt: u128,
-) -> Result<u64, anchor_lang::error::Error> {
-    if deposited_amount == 0 {
-        return Ok(0);
-    }
-
-    let accumulated = (deposited_amount as u128)
-        .checked_mul(accumulated_reward_per_share)
-        .ok_or(VaultError::MathOverflow)?
-        .checked_div(PRECISION)
-        .ok_or(VaultError::MathOverflow)?;
-
-    let pending = accumulated
-        .checked_sub(reward_debt)
-        .ok_or(VaultError::MathOverflow)?;
-
-    // Safe: pending rewards in EURC base units will always fit in u64
-    // (max ~18.4 * 10^18 base units = 18.4 trillion EURC)
-    Ok(pending as u64)
-}
-
-/// Calculate new accumulated_reward_per_share after funding rewards:
-/// new_acc = old_acc + (reward_amount * PRECISION / total_deposits)
-pub fn calculate_new_acc_reward_per_share(
-    current_acc: u128,
-    reward_amount: u64,
-    total_deposits: u64,
+/// Calculate exchange rate: EURC per pbEURC, scaled by PRECISION.
+/// Returns PRECISION (1:1) when supply is 0.
+pub fn calculate_exchange_rate(
+    total_eurc: u64,
+    total_supply: u64,
 ) -> Result<u128, anchor_lang::error::Error> {
-    if total_deposits == 0 {
-        // No stakers — rewards can't be distributed
-        return Ok(current_acc);
+    if total_supply == 0 {
+        return Ok(PRECISION);
     }
 
-    let reward_per_share = (reward_amount as u128)
+    (total_eurc as u128)
         .checked_mul(PRECISION)
         .ok_or(VaultError::MathOverflow)?
-        .checked_div(total_deposits as u128)
-        .ok_or(VaultError::MathOverflow)?;
-
-    current_acc
-        .checked_add(reward_per_share)
+        .checked_div(total_supply as u128)
         .ok_or_else(|| VaultError::MathOverflow.into())
 }
 
-/// Calculate reward_debt for a given deposit amount at current acc_reward_per_share:
-/// reward_debt = deposited_amount * acc_reward_per_share / PRECISION
-pub fn calculate_reward_debt(
-    deposited_amount: u64,
-    accumulated_reward_per_share: u128,
-) -> Result<u128, anchor_lang::error::Error> {
-    (deposited_amount as u128)
-        .checked_mul(accumulated_reward_per_share)
+/// Convert EURC amount to pbEURC shares at the given exchange rate.
+/// Rounds DOWN to protect the vault (user gets slightly fewer shares).
+pub fn eurc_to_shares(
+    eurc_amount: u64,
+    exchange_rate: u128,
+) -> Result<u64, anchor_lang::error::Error> {
+    if exchange_rate == 0 {
+        return Err(VaultError::MathOverflow.into());
+    }
+
+    let shares = (eurc_amount as u128)
+        .checked_mul(PRECISION)
+        .ok_or(VaultError::MathOverflow)?
+        .checked_div(exchange_rate)
+        .ok_or(VaultError::MathOverflow)?;
+
+    u64::try_from(shares).map_err(|_| VaultError::MathOverflow.into())
+}
+
+/// Convert pbEURC shares to EURC amount at the given exchange rate.
+/// Rounds DOWN (user gets slightly less EURC).
+pub fn shares_to_eurc(
+    shares: u64,
+    exchange_rate: u128,
+) -> Result<u64, anchor_lang::error::Error> {
+    let eurc = (shares as u128)
+        .checked_mul(exchange_rate)
         .ok_or(VaultError::MathOverflow)?
         .checked_div(PRECISION)
-        .ok_or_else(|| VaultError::MathOverflow.into())
+        .ok_or(VaultError::MathOverflow)?;
+
+    u64::try_from(eurc).map_err(|_| VaultError::MathOverflow.into())
 }
 
 #[cfg(test)]
@@ -68,49 +57,62 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_no_rewards_with_zero_deposit() {
-        let result = calculate_pending_rewards(0, 1_000_000, 0).unwrap();
-        assert_eq!(result, 0);
+    fn test_initial_exchange_rate() {
+        let rate = calculate_exchange_rate(0, 0).unwrap();
+        assert_eq!(rate, PRECISION); // 1:1 when empty
     }
 
     #[test]
-    fn test_basic_reward_calculation() {
-        // User deposited 100 EURC (100_000_000 base units)
-        // acc_reward_per_share = 10_000_000_000 (0.01 EURC per 1 EURC deposited)
-        // reward_debt = 0 (first deposit at acc=0)
-        let pending = calculate_pending_rewards(
-            100_000_000, // 100 EURC
-            10_000_000_000, // 0.01 per unit (scaled)
-            0,
-        ).unwrap();
-        // 100_000_000 * 10_000_000_000 / 10^12 = 1_000_000 (1 EURC)
-        assert_eq!(pending, 1_000_000);
+    fn test_exchange_rate_1_to_1() {
+        // 100 EURC, 100 pbEURC supply → rate = 1.0
+        let rate = calculate_exchange_rate(100_000_000, 100_000_000).unwrap();
+        assert_eq!(rate, PRECISION);
     }
 
     #[test]
-    fn test_acc_reward_per_share_update() {
-        let new_acc = calculate_new_acc_reward_per_share(
-            0,
-            10_000_000, // 10 EURC reward
-            100_000_000, // 100 EURC total deposits
-        ).unwrap();
-        // 10_000_000 * 10^12 / 100_000_000 = 100_000_000_000
-        assert_eq!(new_acc, 100_000_000_000);
+    fn test_exchange_rate_grows_with_rewards() {
+        // 110 EURC, 100 pbEURC supply → rate = 1.1
+        let rate = calculate_exchange_rate(110_000_000, 100_000_000).unwrap();
+        assert_eq!(rate, 1_100_000_000_000); // 1.1 * PRECISION
     }
 
     #[test]
-    fn test_reward_debt_calculation() {
-        let debt = calculate_reward_debt(
-            100_000_000, // 100 EURC
-            100_000_000_000, // acc reward
-        ).unwrap();
-        // 100_000_000 * 100_000_000_000 / 10^12 = 10_000_000
-        assert_eq!(debt, 10_000_000);
+    fn test_eurc_to_shares_at_1_to_1() {
+        let shares = eurc_to_shares(100_000_000, PRECISION).unwrap();
+        assert_eq!(shares, 100_000_000);
     }
 
     #[test]
-    fn test_no_rewards_distributed_to_empty_vault() {
-        let acc = calculate_new_acc_reward_per_share(500, 1_000_000, 0).unwrap();
-        assert_eq!(acc, 500); // unchanged
+    fn test_eurc_to_shares_at_higher_rate() {
+        // Rate = 1.1, depositing 110 EURC → should get 100 shares
+        let rate = 1_100_000_000_000u128;
+        let shares = eurc_to_shares(110_000_000, rate).unwrap();
+        assert_eq!(shares, 100_000_000);
+    }
+
+    #[test]
+    fn test_shares_to_eurc_at_1_to_1() {
+        let eurc = shares_to_eurc(100_000_000, PRECISION).unwrap();
+        assert_eq!(eurc, 100_000_000);
+    }
+
+    #[test]
+    fn test_shares_to_eurc_at_higher_rate() {
+        // Rate = 1.1, 100 shares → should get 110 EURC
+        let rate = 1_100_000_000_000u128;
+        let eurc = shares_to_eurc(100_000_000, rate).unwrap();
+        assert_eq!(eurc, 110_000_000);
+    }
+
+    #[test]
+    fn test_round_down_protects_vault() {
+        // Rate = 1.1, depositing 100 EURC → 90.909... shares → rounds to 90_909_090
+        let rate = 1_100_000_000_000u128;
+        let shares = eurc_to_shares(100_000_000, rate).unwrap();
+        assert_eq!(shares, 90_909_090); // floor, not 90_909_091
+
+        // Converting back: 90_909_090 shares at 1.1 rate = 99_999_999 EURC (not 100M)
+        let back = shares_to_eurc(shares, rate).unwrap();
+        assert!(back <= 100_000_000); // vault never loses
     }
 }

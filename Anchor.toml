@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-eurc_vault = "EVau1tHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH"
+eurc_vault = "EDtprVCrspYrtBezVdwpGmbYehN1cm1PmkPD6o65gJq1"
 
 [programs.devnet]
-eurc_vault = "EVau1tHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH"
+eurc_vault = "EDtprVCrspYrtBezVdwpGmbYehN1cm1PmkPD6o65gJq1"
 
 [registry]
 url = "https://api.apr.dev"

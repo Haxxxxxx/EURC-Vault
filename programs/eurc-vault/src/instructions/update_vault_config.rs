@@ -27,7 +27,7 @@ pub fn handler(
     let vault = &mut ctx.accounts.vault_config;
 
     if let Some(capacity) = new_max_capacity {
-        require!(capacity >= vault.total_deposits, VaultError::CapacityBelowDeposits);
+        require!(capacity >= vault.total_eurc_in_vault, VaultError::CapacityBelowDeposits);
         vault.max_capacity = capacity;
     }
 

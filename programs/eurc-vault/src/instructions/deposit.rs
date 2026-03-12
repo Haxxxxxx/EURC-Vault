@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer, MintTo};
 
 use crate::constants::*;
 use crate::errors::VaultError;
@@ -17,7 +17,7 @@ pub struct Deposit<'info> {
         seeds = [VAULT_SEED, vault_config.vault_id.to_le_bytes().as_ref()],
         bump = vault_config.bump,
     )]
-    pub vault_config: Account<'info, VaultConfig>,
+    pub vault_config: Box<Account<'info, VaultConfig>>,
 
     #[account(
         init_if_needed,
@@ -26,7 +26,7 @@ pub struct Deposit<'info> {
         seeds = [USER_STAKE_SEED, vault_config.key().as_ref(), user.key().as_ref()],
         bump,
     )]
-    pub user_stake: Account<'info, UserStake>,
+    pub user_stake: Box<Account<'info, UserStake>>,
 
     /// CHECK: PDA authority for the vault token account
     #[account(
@@ -41,7 +41,7 @@ pub struct Deposit<'info> {
         associated_token::mint = vault_config.eurc_mint,
         associated_token::authority = vault_authority,
     )]
-    pub vault_token_account: Account<'info, TokenAccount>,
+    pub vault_token_account: Box<Account<'info, TokenAccount>>,
 
     /// User's EURC token account
     #[account(
@@ -49,7 +49,29 @@ pub struct Deposit<'info> {
         token::mint = vault_config.eurc_mint,
         token::authority = user,
     )]
-    pub user_token_account: Account<'info, TokenAccount>,
+    pub user_token_account: Box<Account<'info, TokenAccount>>,
+
+    /// pbEURC receipt token mint
+    #[account(
+        mut,
+        address = vault_config.pb_eurc_mint,
+    )]
+    pub pb_eurc_mint: Box<Account<'info, Mint>>,
+
+    /// CHECK: PDA mint authority for pbEURC
+    #[account(
+        seeds = [PB_EURC_MINT_AUTH_SEED, vault_config.key().as_ref()],
+        bump = vault_config.pb_mint_auth_bump,
+    )]
+    pub pb_mint_authority: UncheckedAccount<'info>,
+
+    /// User's pbEURC token account (ATA — must be created client-side before deposit)
+    #[account(
+        mut,
+        token::mint = pb_eurc_mint,
+        token::authority = user,
+    )]
+    pub user_pb_token_account: Box<Account<'info, TokenAccount>>,
 
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -65,62 +87,23 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
     require!(amount > 0, VaultError::ZeroDeposit);
     require!(amount >= MIN_DEPOSIT, VaultError::DepositTooSmall);
     require!(
-        vault.total_deposits.checked_add(amount).ok_or(VaultError::MathOverflow)? <= vault.max_capacity,
+        vault.total_eurc_in_vault.checked_add(amount).ok_or(VaultError::MathOverflow)? <= vault.max_capacity,
         VaultError::VaultCapacityExceeded
     );
 
-    // Auto-claim pending rewards before updating deposit
-    let rewards_claimed = if stake.deposited_amount > 0 {
-        let pending = math::calculate_pending_rewards(
-            stake.deposited_amount,
-            vault.accumulated_reward_per_share,
-            stake.reward_debt,
-        )?;
+    // Calculate shares to mint at current exchange rate
+    let shares_to_mint = math::eurc_to_shares(amount, vault.exchange_rate)?;
+    require!(shares_to_mint > 0, VaultError::DepositTooSmall);
 
-        if pending > 0 {
-            // Transfer rewards from vault to user
-            let vault_key = vault.key();
-            let seeds = &[
-                VAULT_AUTHORITY_SEED,
-                vault_key.as_ref(),
-                &[vault.authority_bump],
-            ];
-            let signer_seeds = &[&seeds[..]];
-
-            token::transfer(
-                CpiContext::new_with_signer(
-                    ctx.accounts.token_program.to_account_info(),
-                    Transfer {
-                        from: ctx.accounts.vault_token_account.to_account_info(),
-                        to: ctx.accounts.user_token_account.to_account_info(),
-                        authority: ctx.accounts.vault_authority.to_account_info(),
-                    },
-                    signer_seeds,
-                ),
-                pending,
-            )?;
-
-            stake.total_rewards_claimed = stake
-                .total_rewards_claimed
-                .checked_add(pending)
-                .ok_or(VaultError::MathOverflow)?;
-
-            pending
-        } else {
-            0
-        }
-    } else {
-        // First deposit — initialize stake metadata
+    // Initialize user stake if first deposit
+    if stake.first_deposit_time == 0 {
         stake.vault = vault.key();
         stake.user = ctx.accounts.user.key();
         stake.bump = ctx.bumps.user_stake;
         stake.first_deposit_time = clock.unix_timestamp;
-        stake._reserved = [0u8; 64];
 
         vault.staker_count = vault.staker_count.checked_add(1).ok_or(VaultError::MathOverflow)?;
-
-        0
-    };
+    }
 
     // Transfer EURC from user to vault
     token::transfer(
@@ -135,28 +118,52 @@ pub fn handler(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         amount,
     )?;
 
-    // Update state
-    stake.deposited_amount = stake
-        .deposited_amount
-        .checked_add(amount)
-        .ok_or(VaultError::MathOverflow)?;
-    stake.reward_debt = math::calculate_reward_debt(
-        stake.deposited_amount,
-        vault.accumulated_reward_per_share,
-    )?;
-    stake.last_interaction_time = clock.unix_timestamp;
+    // Mint pbEURC shares to user
+    let vault_key = vault.key();
+    let mint_seeds = &[
+        PB_EURC_MINT_AUTH_SEED,
+        vault_key.as_ref(),
+        &[vault.pb_mint_auth_bump],
+    ];
+    let mint_signer = &[&mint_seeds[..]];
 
-    vault.total_deposits = vault
-        .total_deposits
+    token::mint_to(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            MintTo {
+                mint: ctx.accounts.pb_eurc_mint.to_account_info(),
+                to: ctx.accounts.user_pb_token_account.to_account_info(),
+                authority: ctx.accounts.pb_mint_authority.to_account_info(),
+            },
+            mint_signer,
+        ),
+        shares_to_mint,
+    )?;
+
+    // Update vault state
+    vault.total_eurc_in_vault = vault
+        .total_eurc_in_vault
         .checked_add(amount)
         .ok_or(VaultError::MathOverflow)?;
+    vault.total_pb_eurc_supply = vault
+        .total_pb_eurc_supply
+        .checked_add(shares_to_mint)
+        .ok_or(VaultError::MathOverflow)?;
+
+    // Recalculate exchange rate
+    vault.exchange_rate = math::calculate_exchange_rate(
+        vault.total_eurc_in_vault,
+        vault.total_pb_eurc_supply,
+    )?;
+
+    stake.last_interaction_time = clock.unix_timestamp;
 
     emit!(Deposited {
         vault: vault.key(),
         user: ctx.accounts.user.key(),
-        amount,
-        total_deposited: stake.deposited_amount,
-        rewards_claimed,
+        eurc_amount: amount,
+        shares_minted: shares_to_mint,
+        exchange_rate: vault.exchange_rate,
     });
 
     Ok(())

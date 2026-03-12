@@ -3,13 +3,9 @@ import {
   Connection,
   PublicKey,
   SystemProgram,
-  SYSVAR_RENT_PUBKEY,
-  type TransactionInstruction,
-  Transaction,
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 
@@ -20,6 +16,8 @@ import {
   findUserStakePda,
   findEpochSnapshotPda,
   findVaultAuthorityPda,
+  findPbEurcMintPda,
+  findPbMintAuthorityPda,
 } from "./pda";
 import type {
   VaultConfig,
@@ -33,6 +31,7 @@ import type {
   InitiateAuthorityTransferParams,
   EpochHistoryQuery,
 } from "./types";
+import { sharesToEurc } from "./utils";
 
 // ---------------------------------------------------------------------------
 // Helper: convert number | BN to BN
@@ -49,19 +48,18 @@ function toBN(value: number | BN): BN {
 /**
  * TypeScript client for the EURC Vault Anchor program.
  *
- * Wraps all 13 instructions and provides query helpers for reading on-chain
- * state. Returns `Transaction` objects so the caller controls signing/sending.
+ * pbEURC yield-bearing receipt token model:
+ * - Deposit EURC → receive pbEURC shares at current exchange rate
+ * - Exchange rate grows as rewards are funded → implicit yield
+ * - Withdraw by burning pbEURC → receive more EURC than deposited
  *
- * @example
- * ```ts
- * const client = new EurcVaultClient(connection, wallet);
- * const tx = await client.deposit(vaultId, { amount: 100_000_000 });
- * const sig = await wallet.sendTransaction(tx, connection);
- * ```
+ * Wraps all 12 instructions and provides query helpers for reading on-chain
+ * state. Returns `Transaction` objects so the caller controls signing/sending.
  */
 export class EurcVaultClient {
   readonly program: Program<EurcVault>;
   readonly programId: PublicKey;
+  private mintCache = new Map<string, PublicKey>();
 
   constructor(
     public readonly connection: Connection,
@@ -69,10 +67,17 @@ export class EurcVaultClient {
     programId: PublicKey = PROGRAM_ID,
   ) {
     this.programId = programId;
+
+    // Build an IDL with the correct program address if overridden
+    const idl = programId.equals(PROGRAM_ID)
+      ? IDL
+      : { ...IDL, address: programId.toBase58() };
+
     const provider = new AnchorProvider(connection, wallet, {
       commitment: "confirmed",
     });
-    this.program = new Program<EurcVault>(IDL, programId, provider);
+
+    this.program = new Program<EurcVault>(idl as EurcVault, provider);
   }
 
   // =========================================================================
@@ -80,11 +85,13 @@ export class EurcVaultClient {
   // =========================================================================
 
   /**
-   * Initialize a new EURC staking vault.
+   * Initialize a new EURC vault with pbEURC receipt token mint.
    *
    * The connected wallet becomes the vault authority.
+   * NOTE: The vault token account (ATA for vault_authority + eurc_mint) must be
+   * created client-side before calling this instruction.
    */
-  async initializeVault(params: InitializeVaultParams): Promise<Transaction> {
+  async initializeVault(params: InitializeVaultParams) {
     const {
       vaultId,
       maxCapacity,
@@ -101,46 +108,51 @@ export class EurcVaultClient {
       vaultAuthority,
       true, // allowOwnerOffCurve (PDA)
     );
+    const { publicKey: pbEurcMint } = findPbEurcMintPda(vaultConfig, this.programId);
+    const { publicKey: pbMintAuthority } = findPbMintAuthorityPda(vaultConfig, this.programId);
 
-    const ix = await this.program.methods
+    return this.program.methods
       .initializeVault(
         vaultIdBN,
         toBN(maxCapacity),
         toBN(epochDuration),
         toBN(withdrawalCooldown),
       )
-      .accounts({
+      .accountsPartial({
         authority: this.wallet.publicKey,
         vaultConfig,
         vaultAuthority,
         eurcMint,
         vaultTokenAccount,
+        pbEurcMint,
+        pbMintAuthority,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
-        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-        rent: SYSVAR_RENT_PUBKEY,
       })
       .transaction();
-
-    return ix;
   }
 
   /**
-   * Deposit EURC into the vault. Auto-claims pending rewards.
+   * Deposit EURC into the vault. Mints pbEURC shares at the current exchange rate.
+   *
+   * NOTE: The user's pbEURC token account (ATA) must be created client-side
+   * before calling this instruction.
    */
-  async deposit(vaultId: number | BN, params: DepositParams): Promise<Transaction> {
-    const { vaultConfig, vaultAuthority, vaultTokenAccount, userStake, userTokenAccount } =
-      this.deriveUserAccounts(vaultId);
+  async deposit(vaultId: number | BN, params: DepositParams) {
+    const accounts = await this.deriveUserAccounts(vaultId);
 
     return this.program.methods
       .deposit(toBN(params.amount))
-      .accounts({
+      .accountsPartial({
         user: this.wallet.publicKey,
-        vaultConfig,
-        userStake,
-        vaultAuthority,
-        vaultTokenAccount,
-        userTokenAccount,
+        vaultConfig: accounts.vaultConfig,
+        userStake: accounts.userStake,
+        vaultAuthority: accounts.vaultAuthority,
+        vaultTokenAccount: accounts.vaultTokenAccount,
+        userTokenAccount: accounts.userTokenAccount,
+        pbEurcMint: accounts.pbEurcMint,
+        pbMintAuthority: accounts.pbMintAuthority,
+        userPbTokenAccount: accounts.userPbTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
@@ -148,95 +160,84 @@ export class EurcVaultClient {
   }
 
   /**
-   * Initiate a withdrawal (starts cooldown period).
+   * Initiate a withdrawal — burns pbEURC shares and locks EURC value
+   * until cooldown elapses. Amount is in EURC base units.
    */
   async initiateWithdrawal(
     vaultId: number | BN,
     params: InitiateWithdrawalParams,
-  ): Promise<Transaction> {
-    const { vaultConfig, userStake } = this.deriveUserAccounts(vaultId);
+  ) {
+    const accounts = await this.deriveUserAccounts(vaultId);
 
     return this.program.methods
       .initiateWithdrawal(toBN(params.amount))
-      .accounts({
+      .accountsPartial({
         user: this.wallet.publicKey,
-        vaultConfig,
-        userStake,
+        vaultConfig: accounts.vaultConfig,
+        userStake: accounts.userStake,
+        pbEurcMint: accounts.pbEurcMint,
+        userPbTokenAccount: accounts.userPbTokenAccount,
+        tokenProgram: TOKEN_PROGRAM_ID,
       })
       .transaction();
   }
 
   /**
    * Complete a pending withdrawal after the cooldown has elapsed.
+   * Transfers locked EURC to the user.
    */
-  async completeWithdrawal(vaultId: number | BN): Promise<Transaction> {
-    const { vaultConfig, vaultAuthority, vaultTokenAccount, userStake, userTokenAccount } =
-      this.deriveUserAccounts(vaultId);
+  async completeWithdrawal(vaultId: number | BN) {
+    const accounts = await this.deriveUserAccounts(vaultId);
 
     return this.program.methods
       .completeWithdrawal()
-      .accounts({
+      .accountsPartial({
         user: this.wallet.publicKey,
-        vaultConfig,
-        userStake,
-        vaultAuthority,
-        vaultTokenAccount,
-        userTokenAccount,
+        vaultConfig: accounts.vaultConfig,
+        userStake: accounts.userStake,
+        vaultAuthority: accounts.vaultAuthority,
+        vaultTokenAccount: accounts.vaultTokenAccount,
+        userTokenAccount: accounts.userTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .transaction();
   }
 
   /**
-   * Cancel a pending withdrawal (re-stakes the amount).
+   * Cancel a pending withdrawal — re-mints pbEURC at the CURRENT exchange rate.
+   * User may receive fewer shares if the rate grew during cooldown.
    */
-  async cancelWithdrawal(vaultId: number | BN): Promise<Transaction> {
-    const { vaultConfig, userStake } = this.deriveUserAccounts(vaultId);
+  async cancelWithdrawal(vaultId: number | BN) {
+    const accounts = await this.deriveUserAccounts(vaultId);
 
     return this.program.methods
       .cancelWithdrawal()
-      .accounts({
+      .accountsPartial({
         user: this.wallet.publicKey,
-        vaultConfig,
-        userStake,
-      })
-      .transaction();
-  }
-
-  /**
-   * Claim accumulated rewards without changing the deposit.
-   */
-  async claimRewards(vaultId: number | BN): Promise<Transaction> {
-    const { vaultConfig, vaultAuthority, vaultTokenAccount, userStake, userTokenAccount } =
-      this.deriveUserAccounts(vaultId);
-
-    return this.program.methods
-      .claimRewards()
-      .accounts({
-        user: this.wallet.publicKey,
-        vaultConfig,
-        userStake,
-        vaultAuthority,
-        vaultTokenAccount,
-        userTokenAccount,
+        vaultConfig: accounts.vaultConfig,
+        userStake: accounts.userStake,
+        pbEurcMint: accounts.pbEurcMint,
+        pbMintAuthority: accounts.pbMintAuthority,
+        userPbTokenAccount: accounts.userPbTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .transaction();
   }
 
   /**
-   * Admin: Fund the rewards pool (increases accumulated_reward_per_share).
+   * Admin: Fund the rewards pool. Transfers EURC to vault, which increases the
+   * exchange rate (more EURC backing the same pbEURC supply).
    */
-  async fundRewards(vaultId: number | BN, params: FundRewardsParams): Promise<Transaction> {
+  async fundRewards(vaultId: number | BN, params: FundRewardsParams) {
     const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
     const { publicKey: vaultAuthority } = findVaultAuthorityPda(vaultConfig, this.programId);
-    const eurcMint = await this.getVaultEurcMint(vaultConfig);
+    const eurcMint = await this.getVaultEurcMintCached(vaultConfig);
     const vaultTokenAccount = getAssociatedTokenAddressSync(eurcMint, vaultAuthority, true);
     const funderTokenAccount = getAssociatedTokenAddressSync(eurcMint, this.wallet.publicKey);
 
     return this.program.methods
       .fundRewards(toBN(params.amount))
-      .accounts({
+      .accountsPartial({
         authority: this.wallet.publicKey,
         vaultConfig,
         vaultAuthority,
@@ -250,7 +251,7 @@ export class EurcVaultClient {
   /**
    * Admin: Advance to the next epoch (creates an on-chain snapshot).
    */
-  async advanceEpoch(vaultId: number | BN): Promise<Transaction> {
+  async advanceEpoch(vaultId: number | BN) {
     const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
 
     // We need the current epoch number to derive the snapshot PDA
@@ -264,7 +265,7 @@ export class EurcVaultClient {
 
     return this.program.methods
       .advanceEpoch()
-      .accounts({
+      .accountsPartial({
         authority: this.wallet.publicKey,
         vaultConfig,
         epochSnapshot,
@@ -279,7 +280,7 @@ export class EurcVaultClient {
   async updateVaultConfig(
     vaultId: number | BN,
     params: UpdateVaultConfigParams,
-  ): Promise<Transaction> {
+  ) {
     const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
 
     return this.program.methods
@@ -288,7 +289,7 @@ export class EurcVaultClient {
         params.newEpochDuration != null ? toBN(params.newEpochDuration) : null,
         params.newWithdrawalCooldown != null ? toBN(params.newWithdrawalCooldown) : null,
       )
-      .accounts({
+      .accountsPartial({
         authority: this.wallet.publicKey,
         vaultConfig,
       })
@@ -298,12 +299,12 @@ export class EurcVaultClient {
   /**
    * Admin: Toggle the vault paused state.
    */
-  async togglePause(vaultId: number | BN): Promise<Transaction> {
+  async togglePause(vaultId: number | BN) {
     const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
 
     return this.program.methods
       .togglePause()
-      .accounts({
+      .accountsPartial({
         authority: this.wallet.publicKey,
         vaultConfig,
       })
@@ -316,12 +317,12 @@ export class EurcVaultClient {
   async initiateAuthorityTransfer(
     vaultId: number | BN,
     params: InitiateAuthorityTransferParams,
-  ): Promise<Transaction> {
+  ) {
     const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
 
     return this.program.methods
       .initiateAuthorityTransfer(params.newAuthority)
-      .accounts({
+      .accountsPartial({
         authority: this.wallet.publicKey,
         vaultConfig,
       })
@@ -331,12 +332,12 @@ export class EurcVaultClient {
   /**
    * Accept an authority transfer (called by the new authority).
    */
-  async acceptAuthorityTransfer(vaultId: number | BN): Promise<Transaction> {
+  async acceptAuthorityTransfer(vaultId: number | BN) {
     const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
 
     return this.program.methods
       .acceptAuthorityTransfer()
-      .accounts({
+      .accountsPartial({
         newAuthority: this.wallet.publicKey,
         vaultConfig,
       })
@@ -344,22 +345,23 @@ export class EurcVaultClient {
   }
 
   /**
-   * Emergency withdraw -- always available, bypasses cooldown and pause.
-   * Withdraws the user's entire deposit plus pending rewards.
+   * Emergency withdraw — always available, bypasses cooldown and pause.
+   * Burns all user pbEURC shares, returns EURC value + any pending withdrawal EURC.
    */
-  async emergencyWithdraw(vaultId: number | BN): Promise<Transaction> {
-    const { vaultConfig, vaultAuthority, vaultTokenAccount, userStake, userTokenAccount } =
-      this.deriveUserAccounts(vaultId);
+  async emergencyWithdraw(vaultId: number | BN) {
+    const accounts = await this.deriveUserAccounts(vaultId);
 
     return this.program.methods
       .emergencyWithdraw()
-      .accounts({
+      .accountsPartial({
         user: this.wallet.publicKey,
-        vaultConfig,
-        userStake,
-        vaultAuthority,
-        vaultTokenAccount,
-        userTokenAccount,
+        vaultConfig: accounts.vaultConfig,
+        userStake: accounts.userStake,
+        vaultAuthority: accounts.vaultAuthority,
+        vaultTokenAccount: accounts.vaultTokenAccount,
+        userTokenAccount: accounts.userTokenAccount,
+        pbEurcMint: accounts.pbEurcMint,
+        userPbTokenAccount: accounts.userPbTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
       })
       .transaction();
@@ -374,8 +376,8 @@ export class EurcVaultClient {
    */
   async getVaultConfig(vaultId: number | BN): Promise<VaultConfig> {
     const { publicKey } = findVaultConfigPda(toBN(vaultId), this.programId);
-    const account = await this.program.account.vaultConfig.fetch(publicKey);
-    return account as unknown as VaultConfig;
+    const account = await (this.program.account as any).vaultConfig.fetch(publicKey);
+    return account as VaultConfig;
   }
 
   /**
@@ -383,8 +385,8 @@ export class EurcVaultClient {
    */
   async getVaultConfigOrNull(vaultId: number | BN): Promise<VaultConfig | null> {
     const { publicKey } = findVaultConfigPda(toBN(vaultId), this.programId);
-    const account = await this.program.account.vaultConfig.fetchNullable(publicKey);
-    return account as unknown as VaultConfig | null;
+    const account = await (this.program.account as any).vaultConfig.fetchNullable(publicKey);
+    return account as VaultConfig | null;
   }
 
   /**
@@ -394,8 +396,8 @@ export class EurcVaultClient {
     const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
     const userKey = user ?? this.wallet.publicKey;
     const { publicKey } = findUserStakePda(vaultConfig, userKey, this.programId);
-    const account = await this.program.account.userStake.fetch(publicKey);
-    return account as unknown as UserStake;
+    const account = await (this.program.account as any).userStake.fetch(publicKey);
+    return account as UserStake;
   }
 
   /**
@@ -405,8 +407,8 @@ export class EurcVaultClient {
     const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
     const userKey = user ?? this.wallet.publicKey;
     const { publicKey } = findUserStakePda(vaultConfig, userKey, this.programId);
-    const account = await this.program.account.userStake.fetchNullable(publicKey);
-    return account as unknown as UserStake | null;
+    const account = await (this.program.account as any).userStake.fetchNullable(publicKey);
+    return account as UserStake | null;
   }
 
   /**
@@ -415,8 +417,8 @@ export class EurcVaultClient {
   async getEpochSnapshot(vaultId: number | BN, epochNumber: number | BN): Promise<EpochSnapshot> {
     const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
     const { publicKey } = findEpochSnapshotPda(vaultConfig, toBN(epochNumber), this.programId);
-    const account = await this.program.account.epochSnapshot.fetch(publicKey);
-    return account as unknown as EpochSnapshot;
+    const account = await (this.program.account as any).epochSnapshot.fetch(publicKey);
+    return account as EpochSnapshot;
   }
 
   /**
@@ -428,8 +430,8 @@ export class EurcVaultClient {
   ): Promise<EpochSnapshot | null> {
     const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
     const { publicKey } = findEpochSnapshotPda(vaultConfig, toBN(epochNumber), this.programId);
-    const account = await this.program.account.epochSnapshot.fetchNullable(publicKey);
-    return account as unknown as EpochSnapshot | null;
+    const account = await (this.program.account as any).epochSnapshot.fetchNullable(publicKey);
+    return account as EpochSnapshot | null;
   }
 
   /**
@@ -470,7 +472,7 @@ export class EurcVaultClient {
         if (info === null) continue;
         try {
           const decoded = this.program.coder.accounts.decode("EpochSnapshot", info.data);
-          snapshots.push(decoded as unknown as EpochSnapshot);
+          snapshots.push(decoded as EpochSnapshot);
         } catch {
           // Skip accounts that fail to decode
         }
@@ -478,6 +480,46 @@ export class EurcVaultClient {
     }
 
     return snapshots;
+  }
+
+  /**
+   * Get the current exchange rate from a vault (as a bigint, scaled by PRECISION).
+   */
+  async getExchangeRate(vaultId: number | BN): Promise<bigint> {
+    const vault = await this.getVaultConfig(vaultId);
+    return BigInt(vault.exchangeRate.toString());
+  }
+
+  /**
+   * Get a user's pbEURC balance for a specific vault.
+   * Returns the raw SPL token balance (bigint, 6 decimals).
+   */
+  async getUserPbEurcBalance(vaultId: number | BN, user?: PublicKey): Promise<bigint> {
+    const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
+    const { publicKey: pbEurcMint } = findPbEurcMintPda(vaultConfig, this.programId);
+    const userKey = user ?? this.wallet.publicKey;
+    const userPbTokenAccount = getAssociatedTokenAddressSync(pbEurcMint, userKey);
+
+    try {
+      const account = await this.connection.getTokenAccountBalance(userPbTokenAccount);
+      return BigInt(account.value.amount);
+    } catch {
+      return 0n;
+    }
+  }
+
+  /**
+   * Get the current EURC value of a user's pbEURC position in a vault.
+   * Returns the EURC value in base units (bigint, 6 decimals).
+   */
+  async getPositionValue(vaultId: number | BN, user?: PublicKey): Promise<bigint> {
+    const [balance, exchangeRate] = await Promise.all([
+      this.getUserPbEurcBalance(vaultId, user),
+      this.getExchangeRate(vaultId),
+    ]);
+
+    if (balance === 0n) return 0n;
+    return sharesToEurc(balance, exchangeRate);
   }
 
   // =========================================================================
@@ -501,6 +543,18 @@ export class EurcVaultClient {
     return findVaultAuthorityPda(vaultConfig, this.programId).publicKey;
   }
 
+  /** Get the pbEURC mint PDA address for a given vault. */
+  getPbEurcMintAddress(vaultId: number | BN): PublicKey {
+    const vaultConfig = this.getVaultConfigAddress(vaultId);
+    return findPbEurcMintPda(vaultConfig, this.programId).publicKey;
+  }
+
+  /** Get the pbEURC mint authority PDA address for a given vault. */
+  getPbMintAuthorityAddress(vaultId: number | BN): PublicKey {
+    const vaultConfig = this.getVaultConfigAddress(vaultId);
+    return findPbMintAuthorityPda(vaultConfig, this.programId).publicKey;
+  }
+
   /** Get the vault's EURC token account address. */
   async getVaultTokenAccountAddress(vaultId: number | BN): Promise<PublicKey> {
     const vaultConfig = this.getVaultConfigAddress(vaultId);
@@ -515,10 +569,9 @@ export class EurcVaultClient {
 
   /**
    * Derive all common user-facing account addresses for a vault.
-   * Uses the connected wallet's EURC ATA and the vault's EURC mint
-   * (fetched lazily or using the mainnet default for the token account derivation).
+   * Includes pbEURC accounts for the receipt token model.
    */
-  private deriveUserAccounts(vaultId: number | BN) {
+  private async deriveUserAccounts(vaultId: number | BN) {
     const { publicKey: vaultConfig } = findVaultConfigPda(toBN(vaultId), this.programId);
     const { publicKey: vaultAuthority } = findVaultAuthorityPda(vaultConfig, this.programId);
     const { publicKey: userStake } = findUserStakePda(
@@ -526,18 +579,22 @@ export class EurcVaultClient {
       this.wallet.publicKey,
       this.programId,
     );
+    const { publicKey: pbEurcMint } = findPbEurcMintPda(vaultConfig, this.programId);
+    const { publicKey: pbMintAuthority } = findPbMintAuthorityPda(vaultConfig, this.programId);
 
-    // NOTE: We use EURC_MINT_MAINNET as the default for ATA derivation.
-    // The on-chain program validates the actual mint. If using a different
-    // mint (e.g. devnet test mint), callers should use the explicit
-    // instruction builder methods instead.
+    const eurcMint = await this.getVaultEurcMintCached(vaultConfig);
+
     const vaultTokenAccount = getAssociatedTokenAddressSync(
-      EURC_MINT_MAINNET,
+      eurcMint,
       vaultAuthority,
       true,
     );
     const userTokenAccount = getAssociatedTokenAddressSync(
-      EURC_MINT_MAINNET,
+      eurcMint,
+      this.wallet.publicKey,
+    );
+    const userPbTokenAccount = getAssociatedTokenAddressSync(
+      pbEurcMint,
       this.wallet.publicKey,
     );
 
@@ -547,6 +604,9 @@ export class EurcVaultClient {
       vaultTokenAccount,
       userStake,
       userTokenAccount,
+      pbEurcMint,
+      pbMintAuthority,
+      userPbTokenAccount,
     };
   }
 
@@ -556,10 +616,23 @@ export class EurcVaultClient {
    */
   private async getVaultEurcMint(vaultConfig: PublicKey): Promise<PublicKey> {
     try {
-      const account = await this.program.account.vaultConfig.fetch(vaultConfig);
-      return (account as unknown as VaultConfig).eurcMint;
+      const account = await (this.program.account as any).vaultConfig.fetch(vaultConfig);
+      return (account as VaultConfig).eurcMint;
     } catch {
       return EURC_MINT_MAINNET;
     }
+  }
+
+  /**
+   * Cached version of getVaultEurcMint — avoids repeated RPC calls
+   * for the same vaultConfig within a client instance.
+   */
+  private async getVaultEurcMintCached(vaultConfig: PublicKey): Promise<PublicKey> {
+    const key = vaultConfig.toBase58();
+    const cached = this.mintCache.get(key);
+    if (cached) return cached;
+    const mint = await this.getVaultEurcMint(vaultConfig);
+    this.mintCache.set(key, mint);
+    return mint;
   }
 }

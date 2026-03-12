@@ -12,18 +12,11 @@ pub struct UserStake {
     /// PDA bump
     pub bump: u8,
 
-    /// Amount of EURC currently deposited (base units)
-    pub deposited_amount: u64,
+    /// EURC value locked during pending withdrawal (at initiation-time exchange rate)
+    pub pending_withdrawal_eurc: u64,
 
-    /// Reward debt = deposited_amount * accumulated_reward_per_share / PRECISION
-    /// at the time of last deposit/claim. Used for MasterChef reward math.
-    pub reward_debt: u128,
-
-    /// Total rewards ever claimed by this user (base units)
-    pub total_rewards_claimed: u64,
-
-    /// Pending withdrawal amount (0 if no withdrawal pending)
-    pub pending_withdrawal_amount: u64,
+    /// pbEURC shares burned when withdrawal was initiated (for cancel recomputation)
+    pub pending_withdrawal_shares: u64,
 
     /// Timestamp when pending withdrawal becomes available (0 if none)
     pub withdrawal_available_at: i64,
@@ -31,14 +24,11 @@ pub struct UserStake {
     /// Timestamp of first deposit
     pub first_deposit_time: i64,
 
-    /// Timestamp of last interaction (deposit, withdraw, claim)
+    /// Timestamp of last interaction (deposit, withdraw)
     pub last_interaction_time: i64,
-
-    /// Reserved space for future upgrades
-    pub _reserved: [u8; 64],
 }
 
 impl UserStake {
-    /// Account size: 8 (discriminator) + fields
-    pub const LEN: usize = 8 + 32 + 32 + 1 + 8 + 16 + 8 + 8 + 8 + 8 + 8 + 64;
+    // 8 (discriminator) + 32 + 32 + 1 + 8 + 8 + 8 + 8 + 8
+    pub const LEN: usize = 8 + 32 + 32 + 1 + 8 + 8 + 8 + 8 + 8;
 }

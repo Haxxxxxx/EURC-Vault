@@ -6,9 +6,7 @@ import type { BN } from "@coral-xyz/anchor";
 // ---------------------------------------------------------------------------
 
 /**
- * Decoded VaultConfig account.
- *
- * PDA seeds: `["vault", vault_id.to_le_bytes()]`
+ * Decoded VaultConfig account — pbEURC receipt token model.
  */
 export interface VaultConfig {
   vaultId: BN;
@@ -17,11 +15,14 @@ export interface VaultConfig {
   eurcMint: PublicKey;
   bump: number;
   authorityBump: number;
+  pbMintAuthBump: number;
   paused: boolean;
   maxCapacity: BN;
-  totalDeposits: BN;
-  totalRewardsDistributed: BN;
-  accumulatedRewardPerShare: BN; // u128 on-chain, Anchor deserializes as BN
+  pbEurcMint: PublicKey;
+  totalEurcInVault: BN;
+  totalPbEurcSupply: BN;
+  totalRewardsFunded: BN;
+  exchangeRate: BN; // u128 on-chain, Anchor deserializes as BN
   currentEpoch: BN;
   epochDuration: BN;
   epochStartTime: BN;
@@ -30,35 +31,30 @@ export interface VaultConfig {
 }
 
 /**
- * Decoded UserStake account.
- *
- * PDA seeds: `["user_stake", vault_config.key(), user.key()]`
+ * Decoded UserStake account — pbEURC model.
  */
 export interface UserStake {
   vault: PublicKey;
   user: PublicKey;
   bump: number;
-  depositedAmount: BN;
-  rewardDebt: BN; // u128 on-chain
-  totalRewardsClaimed: BN;
-  pendingWithdrawalAmount: BN;
+  pendingWithdrawalEurc: BN;
+  pendingWithdrawalShares: BN;
   withdrawalAvailableAt: BN;
   firstDepositTime: BN;
   lastInteractionTime: BN;
 }
 
 /**
- * Decoded EpochSnapshot account.
- *
- * PDA seeds: `["epoch", vault_config.key(), epoch_number.to_le_bytes()]`
+ * Decoded EpochSnapshot account — pbEURC model.
  */
 export interface EpochSnapshot {
   vault: PublicKey;
   epochNumber: BN;
   bump: number;
-  totalDeposits: BN;
-  totalRewardsDistributed: BN;
-  accumulatedRewardPerShare: BN; // u128 on-chain
+  totalEurcInVault: BN;
+  totalPbEurcSupply: BN;
+  exchangeRate: BN; // u128 on-chain
+  rewardsFundedThisEpoch: BN;
   stakerCount: BN;
   startTime: BN;
   endTime: BN;
@@ -130,6 +126,7 @@ export interface VaultInitializedEvent {
   vaultId: BN;
   authority: PublicKey;
   eurcMint: PublicKey;
+  pbEurcMint: PublicKey;
   maxCapacity: BN;
   epochDuration: BN;
   withdrawalCooldown: BN;
@@ -138,49 +135,47 @@ export interface VaultInitializedEvent {
 export interface DepositedEvent {
   vault: PublicKey;
   user: PublicKey;
-  amount: BN;
-  totalDeposited: BN;
-  rewardsClaimed: BN;
+  eurcAmount: BN;
+  sharesMinted: BN;
+  exchangeRate: BN;
 }
 
 export interface WithdrawalInitiatedEvent {
   vault: PublicKey;
   user: PublicKey;
-  amount: BN;
+  eurcAmount: BN;
+  sharesBurned: BN;
+  exchangeRate: BN;
   availableAt: BN;
 }
 
 export interface WithdrawalCompletedEvent {
   vault: PublicKey;
   user: PublicKey;
-  amount: BN;
-  rewardsClaimed: BN;
+  eurcAmount: BN;
 }
 
 export interface WithdrawalCancelledEvent {
   vault: PublicKey;
   user: PublicKey;
-  amount: BN;
-}
-
-export interface RewardsClaimedEvent {
-  vault: PublicKey;
-  user: PublicKey;
-  amount: BN;
+  eurcAmount: BN;
+  sharesReminted: BN;
+  exchangeRate: BN;
 }
 
 export interface RewardsFundedEvent {
   vault: PublicKey;
   funder: PublicKey;
   amount: BN;
-  newAccRewardPerShare: BN;
+  newExchangeRate: BN;
 }
 
 export interface EpochAdvancedEvent {
   vault: PublicKey;
   epochNumber: BN;
-  totalDepositsSnapshot: BN;
-  totalRewardsDistributed: BN;
+  exchangeRate: BN;
+  totalEurcInVault: BN;
+  totalPbEurcSupply: BN;
 }
 
 export interface VaultConfigUpdatedEvent {
@@ -188,4 +183,11 @@ export interface VaultConfigUpdatedEvent {
   maxCapacity: BN;
   epochDuration: BN;
   withdrawalCooldown: BN;
+}
+
+export interface EmergencyWithdrawalExecutedEvent {
+  vault: PublicKey;
+  user: PublicKey;
+  totalEurcReturned: BN;
+  sharesBurned: BN;
 }

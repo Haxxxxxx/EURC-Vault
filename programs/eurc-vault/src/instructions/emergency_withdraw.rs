@@ -1,14 +1,14 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer, Burn};
 
 use crate::constants::*;
 use crate::errors::VaultError;
-use crate::events::WithdrawalCompleted;
+use crate::events::EmergencyWithdrawalExecuted;
 use crate::state::{VaultConfig, UserStake};
 use crate::utils::math;
 
 /// Emergency withdraw — user can always exit, even when vault is paused.
-/// Withdraws entire deposit + pending rewards. No cooldown.
+/// Burns all pbEURC shares, returns EURC value + any pending withdrawal EURC. No cooldown.
 #[derive(Accounts)]
 pub struct EmergencyWithdraw<'info> {
     #[account(mut)]
@@ -49,6 +49,21 @@ pub struct EmergencyWithdraw<'info> {
     )]
     pub user_token_account: Account<'info, TokenAccount>,
 
+    /// pbEURC mint (for burn)
+    #[account(
+        mut,
+        address = vault_config.pb_eurc_mint,
+    )]
+    pub pb_eurc_mint: Account<'info, Mint>,
+
+    /// User's pbEURC token account
+    #[account(
+        mut,
+        token::mint = pb_eurc_mint,
+        token::authority = user,
+    )]
+    pub user_pb_token_account: Account<'info, TokenAccount>,
+
     pub token_program: Program<'info, Token>,
 }
 
@@ -57,21 +72,48 @@ pub fn handler(ctx: Context<EmergencyWithdraw>) -> Result<()> {
     let stake = &mut ctx.accounts.user_stake;
     let clock = Clock::get()?;
 
-    let deposit_amount = stake.deposited_amount;
-    require!(deposit_amount > 0, VaultError::InsufficientBalance);
+    let user_shares = ctx.accounts.user_pb_token_account.amount;
+    let pending_eurc = stake.pending_withdrawal_eurc;
 
-    // Calculate pending rewards
-    let pending_rewards = math::calculate_pending_rewards(
-        stake.deposited_amount,
-        vault.accumulated_reward_per_share,
-        stake.reward_debt,
-    )?;
+    // User must have something to withdraw (shares or pending withdrawal)
+    require!(
+        user_shares > 0 || pending_eurc > 0,
+        VaultError::InsufficientBalance
+    );
 
-    let total_transfer = (deposit_amount as u128)
-        .checked_add(pending_rewards as u128)
-        .ok_or(VaultError::MathOverflow)? as u64;
+    // Calculate EURC value of user's pbEURC shares
+    let shares_eurc_value = if user_shares > 0 {
+        math::shares_to_eurc(user_shares, vault.exchange_rate)?
+    } else {
+        0
+    };
 
-    // Transfer everything back to user
+    // Total = pbEURC value + pending withdrawal EURC
+    let total_eurc = shares_eurc_value
+        .checked_add(pending_eurc)
+        .ok_or(VaultError::MathOverflow)?;
+
+    // Burn all pbEURC shares
+    if user_shares > 0 {
+        token::burn(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Burn {
+                    mint: ctx.accounts.pb_eurc_mint.to_account_info(),
+                    from: ctx.accounts.user_pb_token_account.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            user_shares,
+        )?;
+
+        vault.total_pb_eurc_supply = vault
+            .total_pb_eurc_supply
+            .checked_sub(user_shares)
+            .ok_or(VaultError::MathOverflow)?;
+    }
+
+    // Transfer all EURC back to user
     let vault_key = vault.key();
     let seeds = &[
         VAULT_AUTHORITY_SEED,
@@ -90,31 +132,35 @@ pub fn handler(ctx: Context<EmergencyWithdraw>) -> Result<()> {
             },
             signer_seeds,
         ),
-        total_transfer,
+        total_eurc,
     )?;
 
-    // Reset user state completely
-    vault.total_deposits = vault
-        .total_deposits
-        .checked_sub(deposit_amount)
+    // Update vault state
+    vault.total_eurc_in_vault = vault
+        .total_eurc_in_vault
+        .checked_sub(total_eurc)
         .ok_or(VaultError::MathOverflow)?;
     vault.staker_count = vault.staker_count.saturating_sub(1);
 
-    stake.deposited_amount = 0;
-    stake.reward_debt = 0;
-    stake.pending_withdrawal_amount = 0;
+    // Recalculate exchange rate
+    if vault.total_pb_eurc_supply > 0 {
+        vault.exchange_rate = math::calculate_exchange_rate(
+            vault.total_eurc_in_vault,
+            vault.total_pb_eurc_supply,
+        )?;
+    }
+
+    // Reset user state
+    stake.pending_withdrawal_eurc = 0;
+    stake.pending_withdrawal_shares = 0;
     stake.withdrawal_available_at = 0;
-    stake.total_rewards_claimed = stake
-        .total_rewards_claimed
-        .checked_add(pending_rewards)
-        .ok_or(VaultError::MathOverflow)?;
     stake.last_interaction_time = clock.unix_timestamp;
 
-    emit!(WithdrawalCompleted {
+    emit!(EmergencyWithdrawalExecuted {
         vault: vault.key(),
         user: ctx.accounts.user.key(),
-        amount: deposit_amount,
-        rewards_claimed: pending_rewards,
+        total_eurc_returned: total_eurc,
+        shares_burned: user_shares,
     });
 
     Ok(())

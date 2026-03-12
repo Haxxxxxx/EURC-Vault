@@ -1,4 +1,4 @@
-import { EURC_DECIMALS, PRECISION, SECONDS_PER_YEAR, ONE_EURC } from "./constants";
+import { EURC_DECIMALS, PRECISION, SECONDS_PER_YEAR } from "./constants";
 
 // ---------------------------------------------------------------------------
 // EURC formatting
@@ -19,13 +19,11 @@ export function formatEurc(amount: bigint | number): string {
   const whole = abs / divisor;
   const fractional = abs % divisor;
 
-  // Pad fractional to 2 decimal places (EURC only needs 2 display decimals)
   const fracStr = fractional
     .toString()
     .padStart(EURC_DECIMALS, "0")
     .slice(0, 2);
 
-  // Add thousands separators to the whole part
   const wholeStr = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
   const sign = isNegative ? "-" : "";
@@ -36,11 +34,8 @@ export function formatEurc(amount: bigint | number): string {
  * Parse a human-readable EURC string to base units (bigint).
  *
  * Accepts: "100", "100.50", "1,234.56", "1234.56 EURC"
- *
- * @example parseEurc("100.50")  // 100500000n
  */
 export function parseEurc(amount: string): bigint {
-  // Strip currency label, whitespace, and thousands separators
   const cleaned = amount.replace(/\s*EURC\s*/gi, "").replace(/,/g, "").trim();
 
   if (cleaned === "" || cleaned === ".") {
@@ -55,12 +50,10 @@ export function parseEurc(amount: string): bigint {
   const wholePart = parts[0] ?? "0";
   let fracPart = parts[1] ?? "";
 
-  // Validate numeric
   if (!/^\d+$/.test(wholePart) || (fracPart !== "" && !/^\d+$/.test(fracPart))) {
     throw new Error(`Invalid EURC amount: "${amount}"`);
   }
 
-  // Truncate or pad fractional to EURC_DECIMALS
   if (fracPart.length > EURC_DECIMALS) {
     fracPart = fracPart.slice(0, EURC_DECIMALS);
   } else {
@@ -71,65 +64,99 @@ export function parseEurc(amount: string): bigint {
 }
 
 // ---------------------------------------------------------------------------
-// Reward math (mirrors on-chain MasterChef math in utils/math.rs)
+// pbEURC exchange rate math (mirrors on-chain utils/math.rs)
 // ---------------------------------------------------------------------------
 
 /**
- * Calculate pending (unclaimed) rewards for a user.
- *
- * Formula: `(depositedAmount * accRewardPerShare / PRECISION) - rewardDebt`
- *
- * All inputs are in base units / raw u128 values.
+ * Calculate exchange rate: EURC per pbEURC, scaled by PRECISION.
+ * Returns PRECISION (1:1) when supply is 0.
  */
-export function calculatePendingRewards(
-  depositedAmount: bigint,
-  accRewardPerShare: bigint,
-  rewardDebt: bigint,
+export function calculateExchangeRate(
+  totalEurc: bigint,
+  totalSupply: bigint,
 ): bigint {
-  if (depositedAmount === 0n) return 0n;
+  if (totalSupply === 0n) return PRECISION;
+  return (totalEurc * PRECISION) / totalSupply;
+}
 
-  const accumulated = (depositedAmount * accRewardPerShare) / PRECISION;
-  const pending = accumulated - rewardDebt;
-  return pending < 0n ? 0n : pending;
+/**
+ * Convert EURC amount to pbEURC shares at the given exchange rate.
+ * Rounds DOWN to protect the vault.
+ */
+export function eurcToShares(
+  eurcAmount: bigint,
+  exchangeRate: bigint,
+): bigint {
+  if (exchangeRate === 0n) return 0n;
+  return (eurcAmount * PRECISION) / exchangeRate;
+}
+
+/**
+ * Convert pbEURC shares to EURC amount at the given exchange rate.
+ * Rounds DOWN.
+ */
+export function sharesToEurc(
+  shares: bigint,
+  exchangeRate: bigint,
+): bigint {
+  return (shares * exchangeRate) / PRECISION;
+}
+
+/**
+ * Calculate the EURC value of a user's pbEURC position.
+ */
+export function calculatePositionValue(
+  pbEurcBalance: bigint,
+  exchangeRate: bigint,
+): bigint {
+  return sharesToEurc(pbEurcBalance, exchangeRate);
+}
+
+/**
+ * Calculate yield earned: current position value minus original deposits.
+ * Returns 0 if negative (shouldn't happen in normal operation).
+ */
+export function calculateYieldEarned(
+  pbEurcBalance: bigint,
+  exchangeRate: bigint,
+  originalDepositsEurc: bigint,
+): bigint {
+  const currentValue = calculatePositionValue(pbEurcBalance, exchangeRate);
+  const yield_ = currentValue - originalDepositsEurc;
+  return yield_ < 0n ? 0n : yield_;
 }
 
 // ---------------------------------------------------------------------------
-// APY & projection helpers
+// APY calculation
 // ---------------------------------------------------------------------------
 
 /**
- * Estimate annualized APY from a single epoch's reward distribution.
+ * Calculate APY from exchange rate growth between two epochs.
  *
- * @param totalRewardsPerEpoch  - Total EURC rewards distributed in the epoch (base units)
- * @param totalDeposits         - Total EURC deposited at the time (base units)
- * @param epochDurationSeconds  - Duration of the epoch in seconds
+ * @param startRate    - Exchange rate at epoch start (scaled by PRECISION)
+ * @param endRate      - Exchange rate at epoch end (scaled by PRECISION)
+ * @param durationSecs - Duration between the two snapshots in seconds
  * @returns APY as a percentage (e.g. 5.25 means 5.25%)
  */
 export function calculateApy(
-  totalRewardsPerEpoch: bigint | number,
-  totalDeposits: bigint | number,
-  epochDurationSeconds: number,
+  startRate: bigint | number,
+  endRate: bigint | number,
+  durationSecs: number,
 ): number {
-  const rewards = Number(totalRewardsPerEpoch);
-  const deposits = Number(totalDeposits);
+  const start = Number(startRate);
+  const end = Number(endRate);
 
-  if (deposits === 0 || epochDurationSeconds <= 0) return 0;
+  if (start === 0 || durationSecs <= 0 || end <= start) return 0;
 
-  const epochRate = rewards / deposits;
-  const epochsPerYear = SECONDS_PER_YEAR / epochDurationSeconds;
+  const growthRate = end / start - 1;
+  const periodsPerYear = SECONDS_PER_YEAR / durationSecs;
 
-  // Simple annualization: APY = ((1 + epochRate)^epochsPerYear - 1) * 100
-  const apy = (Math.pow(1 + epochRate, epochsPerYear) - 1) * 100;
-  return apy;
+  // APY = ((1 + growthRate)^periodsPerYear - 1) * 100
+  return (Math.pow(1 + growthRate, periodsPerYear) - 1) * 100;
 }
 
 /**
  * Calculate projected earnings for a deposit over a given number of days.
- *
- * @param depositAmount  - EURC base units to deposit
- * @param apy            - Annual percentage yield (e.g. 5.25 for 5.25%)
- * @param daysAhead      - Number of days to project
- * @returns Projected earnings in EURC base units
  */
 export function calculateProjectedEarnings(
   depositAmount: bigint | number,
@@ -140,7 +167,6 @@ export function calculateProjectedEarnings(
   if (principal === 0 || apy === 0 || daysAhead <= 0) return 0;
 
   const dailyRate = apy / 100 / 365.25;
-  // Compound: P * ((1 + r)^d - 1)
   const earnings = principal * (Math.pow(1 + dailyRate, daysAhead) - 1);
   return Math.floor(earnings);
 }
@@ -151,10 +177,6 @@ export function calculateProjectedEarnings(
 
 /**
  * Get the progress of the current epoch as a number between 0 and 1.
- *
- * @param epochStartTime  - Unix timestamp (seconds) when the epoch started
- * @param epochDuration   - Epoch duration in seconds
- * @returns A number between 0 (just started) and 1 (ended / past due)
  */
 export function getEpochProgress(
   epochStartTime: number,
@@ -169,10 +191,6 @@ export function getEpochProgress(
 
 /**
  * Get the remaining time in the current epoch.
- *
- * @param epochStartTime  - Unix timestamp (seconds) when the epoch started
- * @param epochDuration   - Epoch duration in seconds
- * @returns Seconds remaining, or 0 if the epoch has already ended
  */
 export function getEpochTimeRemaining(
   epochStartTime: number,
@@ -186,9 +204,6 @@ export function getEpochTimeRemaining(
 
 /**
  * Get the remaining time until a pending withdrawal becomes available.
- *
- * @param withdrawalAvailableAt  - Unix timestamp (seconds) when withdrawal unlocks
- * @returns Seconds remaining, or 0 if already available
  */
 export function getWithdrawalTimeRemaining(
   withdrawalAvailableAt: number,

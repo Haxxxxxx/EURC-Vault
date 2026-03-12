@@ -6,7 +6,7 @@ import { PublicKey } from "@solana/web3.js";
 
 /** Placeholder program ID -- replace with deployed address */
 export const PROGRAM_ID = new PublicKey(
-  "EVau1tHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH",
+  "EDtprVCrspYrtBezVdwpGmbYehN1cm1PmkPD6o65gJq1",
 );
 
 // ---------------------------------------------------------------------------
@@ -17,16 +17,24 @@ export const VAULT_SEED = Buffer.from("vault");
 export const USER_STAKE_SEED = Buffer.from("user_stake");
 export const EPOCH_SEED = Buffer.from("epoch");
 export const VAULT_AUTHORITY_SEED = Buffer.from("vault_authority");
+export const PB_EURC_MINT_SEED = Buffer.from("pbeurc_mint");
+export const PB_EURC_MINT_AUTH_SEED = Buffer.from("pbeurc_mint_auth");
 
 // ---------------------------------------------------------------------------
 // Numeric constants
 // ---------------------------------------------------------------------------
 
-/** Precision multiplier for accumulated_reward_per_share (10^12) */
+/** Precision multiplier for exchange_rate (10^12) */
 export const PRECISION = BigInt("1000000000000"); // 10^12
+
+/** Initial exchange rate: 1 pbEURC = 1 EURC */
+export const INITIAL_EXCHANGE_RATE = PRECISION;
 
 /** EURC uses 6 decimal places */
 export const EURC_DECIMALS = 6;
+
+/** pbEURC uses 6 decimal places (matches EURC) */
+export const PB_EURC_DECIMALS = 6;
 
 /** 1 EURC in base units */
 export const ONE_EURC = BigInt(10 ** EURC_DECIMALS); // 1_000_000n
@@ -39,8 +47,8 @@ export const EURC_MINT_MAINNET = new PublicKey(
 /** Default max vault capacity: 10,000,000 EURC */
 export const DEFAULT_MAX_CAPACITY = BigInt("10000000000000"); // 10^13 base units
 
-/** Default epoch duration: 7 days in seconds */
-export const DEFAULT_EPOCH_DURATION = 7 * 24 * 60 * 60; // 604_800
+/** Default epoch duration: 48 hours in seconds */
+export const DEFAULT_EPOCH_DURATION = 48 * 60 * 60; // 172_800
 
 /** Default withdrawal cooldown: 1 day in seconds */
 export const DEFAULT_WITHDRAWAL_COOLDOWN = 24 * 60 * 60; // 86_400

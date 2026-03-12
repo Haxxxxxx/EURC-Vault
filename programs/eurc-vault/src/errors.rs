@@ -17,6 +17,9 @@ pub enum VaultError {
     #[msg("Withdrawal amount exceeds deposited balance")]
     InsufficientBalance,
 
+    #[msg("Insufficient pbEURC shares")]
+    InsufficientShares,
+
     #[msg("Withdrawal amount is zero")]
     ZeroWithdrawal,
 
@@ -31,9 +34,6 @@ pub enum VaultError {
 
     #[msg("User already has a pending withdrawal")]
     WithdrawalAlreadyPending,
-
-    #[msg("No rewards to claim")]
-    NoRewardsToClaim,
 
     #[msg("Reward fund amount is zero")]
     ZeroRewardFund,
@@ -50,7 +50,7 @@ pub enum VaultError {
     #[msg("Invalid EURC mint address")]
     InvalidMint,
 
-    #[msg("Arithmetic overflow in reward calculation")]
+    #[msg("Arithmetic overflow in calculation")]
     MathOverflow,
 
     #[msg("Invalid vault configuration parameter")]
@@ -67,4 +67,10 @@ pub enum VaultError {
 
     #[msg("Epoch duration must be positive")]
     InvalidEpochDuration,
+
+    #[msg("Value exceeds u64 range after conversion")]
+    RewardConversionOverflow,
+
+    #[msg("No active stakers — cannot distribute rewards")]
+    NoActiveStakers,
 }

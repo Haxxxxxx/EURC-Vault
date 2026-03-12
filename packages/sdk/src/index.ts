@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// @eurc-vault/sdk — public API
+// @eurc-vault/sdk — public API (pbEURC yield-bearing receipt token model)
 // ---------------------------------------------------------------------------
 
 // Client
@@ -15,6 +15,8 @@ export {
   findUserStakePda,
   findEpochSnapshotPda,
   findVaultAuthorityPda,
+  findPbEurcMintPda,
+  findPbMintAuthorityPda,
 } from "./pda";
 
 // Constants
@@ -24,8 +26,12 @@ export {
   USER_STAKE_SEED,
   EPOCH_SEED,
   VAULT_AUTHORITY_SEED,
+  PB_EURC_MINT_SEED,
+  PB_EURC_MINT_AUTH_SEED,
   PRECISION,
+  INITIAL_EXCHANGE_RATE,
   EURC_DECIMALS,
+  PB_EURC_DECIMALS,
   ONE_EURC,
   EURC_MINT_MAINNET,
   DEFAULT_MAX_CAPACITY,
@@ -40,7 +46,11 @@ export {
 export {
   formatEurc,
   parseEurc,
-  calculatePendingRewards,
+  calculateExchangeRate,
+  eurcToShares,
+  sharesToEurc,
+  calculatePositionValue,
+  calculateYieldEarned,
   calculateApy,
   calculateProjectedEarnings,
   getEpochProgress,
@@ -66,8 +76,8 @@ export type {
   WithdrawalInitiatedEvent,
   WithdrawalCompletedEvent,
   WithdrawalCancelledEvent,
-  RewardsClaimedEvent,
   RewardsFundedEvent,
   EpochAdvancedEvent,
   VaultConfigUpdatedEvent,
+  EmergencyWithdrawalExecutedEvent,
 } from "./types";

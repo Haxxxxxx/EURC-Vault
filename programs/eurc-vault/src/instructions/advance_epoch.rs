@@ -46,17 +46,17 @@ pub fn handler(ctx: Context<AdvanceEpoch>) -> Result<()> {
         .ok_or(VaultError::MathOverflow)?;
     require!(clock.unix_timestamp >= epoch_end_time, VaultError::EpochNotEnded);
 
-    // Create epoch snapshot
+    // Create epoch snapshot with pbEURC model fields
     snapshot.vault = vault.key();
     snapshot.epoch_number = vault.current_epoch;
     snapshot.bump = ctx.bumps.epoch_snapshot;
-    snapshot.total_deposits = vault.total_deposits;
-    snapshot.total_rewards_distributed = vault.total_rewards_distributed;
-    snapshot.accumulated_reward_per_share = vault.accumulated_reward_per_share;
+    snapshot.total_eurc_in_vault = vault.total_eurc_in_vault;
+    snapshot.total_pb_eurc_supply = vault.total_pb_eurc_supply;
+    snapshot.exchange_rate = vault.exchange_rate;
+    snapshot.rewards_funded_this_epoch = vault.total_rewards_funded; // cumulative snapshot
     snapshot.staker_count = vault.staker_count;
     snapshot.start_time = vault.epoch_start_time;
     snapshot.end_time = clock.unix_timestamp;
-    snapshot._reserved = [0u8; 64];
 
     let completed_epoch = vault.current_epoch;
 
@@ -70,8 +70,9 @@ pub fn handler(ctx: Context<AdvanceEpoch>) -> Result<()> {
     emit!(EpochAdvanced {
         vault: vault.key(),
         epoch_number: completed_epoch,
-        total_deposits_snapshot: snapshot.total_deposits,
-        total_rewards_distributed: snapshot.total_rewards_distributed,
+        exchange_rate: vault.exchange_rate,
+        total_eurc_in_vault: vault.total_eurc_in_vault,
+        total_pb_eurc_supply: vault.total_pb_eurc_supply,
     });
 
     Ok(())

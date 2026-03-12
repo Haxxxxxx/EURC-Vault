@@ -55,25 +55,14 @@ pub fn handler(ctx: Context<CompleteWithdrawal>) -> Result<()> {
     let stake = &mut ctx.accounts.user_stake;
     let clock = Clock::get()?;
 
-    let withdrawal_amount = stake.pending_withdrawal_amount;
-    require!(withdrawal_amount > 0, VaultError::NoPendingWithdrawal);
+    let withdrawal_eurc = stake.pending_withdrawal_eurc;
+    require!(withdrawal_eurc > 0, VaultError::NoPendingWithdrawal);
     require!(
         clock.unix_timestamp >= stake.withdrawal_available_at,
         VaultError::WithdrawalCooldownActive
     );
 
-    // Calculate and claim pending rewards before withdrawal
-    let pending_rewards = math::calculate_pending_rewards(
-        stake.deposited_amount,
-        vault.accumulated_reward_per_share,
-        stake.reward_debt,
-    )?;
-
-    let total_transfer = (withdrawal_amount as u128)
-        .checked_add(pending_rewards as u128)
-        .ok_or(VaultError::MathOverflow)? as u64;
-
-    // Transfer withdrawal + rewards from vault to user
+    // Transfer locked EURC to user
     let vault_key = vault.key();
     let seeds = &[
         VAULT_AUTHORITY_SEED,
@@ -92,41 +81,36 @@ pub fn handler(ctx: Context<CompleteWithdrawal>) -> Result<()> {
             },
             signer_seeds,
         ),
-        total_transfer,
+        withdrawal_eurc,
     )?;
 
-    // Update state
-    stake.deposited_amount = stake
-        .deposited_amount
-        .checked_sub(withdrawal_amount)
+    // Update vault EURC total
+    vault.total_eurc_in_vault = vault
+        .total_eurc_in_vault
+        .checked_sub(withdrawal_eurc)
         .ok_or(VaultError::MathOverflow)?;
-    stake.pending_withdrawal_amount = 0;
+
+    // Clear pending withdrawal
+    stake.pending_withdrawal_eurc = 0;
+    stake.pending_withdrawal_shares = 0;
     stake.withdrawal_available_at = 0;
-    stake.reward_debt = math::calculate_reward_debt(
-        stake.deposited_amount,
-        vault.accumulated_reward_per_share,
-    )?;
-    stake.total_rewards_claimed = stake
-        .total_rewards_claimed
-        .checked_add(pending_rewards)
-        .ok_or(VaultError::MathOverflow)?;
     stake.last_interaction_time = clock.unix_timestamp;
 
-    vault.total_deposits = vault
-        .total_deposits
-        .checked_sub(withdrawal_amount)
-        .ok_or(VaultError::MathOverflow)?;
-
-    // Decrement staker count if fully withdrawn
-    if stake.deposited_amount == 0 {
-        vault.staker_count = vault.staker_count.saturating_sub(1);
+    // Recalculate exchange rate
+    if vault.total_pb_eurc_supply > 0 {
+        vault.exchange_rate = math::calculate_exchange_rate(
+            vault.total_eurc_in_vault,
+            vault.total_pb_eurc_supply,
+        )?;
     }
+
+    // Decrement staker count if user has no more shares and no pending withdrawal
+    // (check user's pbEURC balance would require passing in the token account — we skip for simplicity)
 
     emit!(WithdrawalCompleted {
         vault: vault.key(),
         user: ctx.accounts.user.key(),
-        amount: withdrawal_amount,
-        rewards_claimed: pending_rewards,
+        eurc_amount: withdrawal_eurc,
     });
 
     Ok(())

@@ -12,14 +12,17 @@ pub struct EpochSnapshot {
     /// PDA bump
     pub bump: u8,
 
-    /// Total deposits at epoch end (base units)
-    pub total_deposits: u64,
+    /// Total EURC held in vault at epoch end
+    pub total_eurc_in_vault: u64,
 
-    /// Total rewards distributed during this epoch (base units)
-    pub total_rewards_distributed: u64,
+    /// Total pbEURC supply at epoch end
+    pub total_pb_eurc_supply: u64,
 
-    /// Accumulated reward per share at epoch end
-    pub accumulated_reward_per_share: u128,
+    /// Exchange rate at epoch end (scaled by PRECISION)
+    pub exchange_rate: u128,
+
+    /// Rewards funded during this epoch (cumulative snapshot)
+    pub rewards_funded_this_epoch: u64,
 
     /// Number of stakers at epoch end
     pub staker_count: u64,
@@ -29,12 +32,9 @@ pub struct EpochSnapshot {
 
     /// Epoch end timestamp
     pub end_time: i64,
-
-    /// Reserved space for future upgrades
-    pub _reserved: [u8; 64],
 }
 
 impl EpochSnapshot {
-    /// Account size: 8 (discriminator) + fields
-    pub const LEN: usize = 8 + 32 + 8 + 1 + 8 + 8 + 16 + 8 + 8 + 8 + 64;
+    // 8 (discriminator) + 32 + 8 + 1 + 8 + 8 + 16 + 8 + 8 + 8 + 8
+    pub const LEN: usize = 8 + 32 + 8 + 1 + 8 + 8 + 16 + 8 + 8 + 8 + 8;
 }

@@ -9,13 +9,13 @@ pub mod utils;
 
 use instructions::*;
 
-declare_id!("EVau1tHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH");
+declare_id!("EDtprVCrspYrtBezVdwpGmbYehN1cm1PmkPD6o65gJq1");
 
 #[program]
 pub mod eurc_vault {
     use super::*;
 
-    /// Initialize a new EURC staking vault
+    /// Initialize a new EURC vault with pbEURC receipt token
     pub fn initialize_vault(
         ctx: Context<InitializeVault>,
         vault_id: u64,
@@ -32,12 +32,12 @@ pub mod eurc_vault {
         )
     }
 
-    /// Deposit EURC into the vault (auto-claims pending rewards)
+    /// Deposit EURC into the vault — receives pbEURC shares at current exchange rate
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         instructions::deposit::handler(ctx, amount)
     }
 
-    /// Initiate a withdrawal (starts cooldown period)
+    /// Initiate a withdrawal (burns pbEURC shares, starts cooldown)
     pub fn initiate_withdrawal(ctx: Context<InitiateWithdrawal>, amount: u64) -> Result<()> {
         instructions::initiate_withdrawal::handler(ctx, amount)
     }
@@ -47,17 +47,12 @@ pub mod eurc_vault {
         instructions::complete_withdrawal::handler(ctx)
     }
 
-    /// Cancel a pending withdrawal (re-stakes the amount)
+    /// Cancel a pending withdrawal (re-mints pbEURC at current exchange rate)
     pub fn cancel_withdrawal(ctx: Context<CancelWithdrawal>) -> Result<()> {
         instructions::cancel_withdrawal::handler(ctx)
     }
 
-    /// Claim accumulated rewards without changing deposit
-    pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
-        instructions::claim_rewards::handler(ctx)
-    }
-
-    /// Admin: Fund rewards pool (increases accumulated_reward_per_share)
+    /// Admin: Fund rewards pool (adds EURC to vault, exchange rate grows)
     pub fn fund_rewards(ctx: Context<FundRewards>, amount: u64) -> Result<()> {
         instructions::fund_rewards::handler(ctx, amount)
     }

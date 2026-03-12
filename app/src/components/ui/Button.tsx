@@ -1,5 +1,8 @@
+'use client';
+
 import { cn } from '@/lib/utils';
 import { ButtonHTMLAttributes, ReactNode } from 'react';
+import { motion } from 'framer-motion';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
@@ -35,7 +38,7 @@ export function Button({
   };
 
   return (
-    <button
+    <motion.button
       className={cn(
         baseClasses,
         variantClasses[variant],
@@ -45,7 +48,9 @@ export function Button({
         className
       )}
       disabled={disabled || loading}
-      {...props}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+      {...(props as any)}
     >
       {loading ? (
         <>
@@ -55,6 +60,6 @@ export function Button({
       ) : (
         children
       )}
-    </button>
+    </motion.button>
   );
 }

@@ -18,6 +18,9 @@ import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
 import { formatEurc, formatApy, formatEurcCompact } from '../lib/formatters';
 import { EURC_DECIMALS } from '../lib/constants';
+import { EarningsProjectionChart } from '../components/charts/EarningsProjectionChart';
+import { RewardsTimelineChart } from '../components/charts/RewardsTimelineChart';
+import { useEarningsProjection, useRewardsTimeline } from '../hooks/useChartData';
 
 type Tab = 'deposit' | 'withdraw';
 
@@ -44,6 +47,11 @@ export function VaultDetailScreen() {
   const baseUnits = Math.floor(parsedAmount * Math.pow(10, EURC_DECIMALS));
   const monthlyEarnings = parsedAmount * (vault.apy / 100 / 12);
   const yearlyEarnings = parsedAmount * (vault.apy / 100);
+  const earningsData = useEarningsProjection(parsedAmount, vault.apy);
+  const rewardsTimelineData = useRewardsTimeline(
+    30,
+    userStake ? userStake.pendingRewards / Math.pow(10, EURC_DECIMALS) : 100
+  );
   const userSharePct = vault.totalDeposits > 0 && userStake
     ? ((userStake.depositedAmount / vault.totalDeposits) * 100).toFixed(2)
     : '0.00';
@@ -139,6 +147,9 @@ export function VaultDetailScreen() {
                 </Text>
               </View>
             </View>
+            <View style={styles.rewardsChartContainer}>
+              <RewardsTimelineChart data={rewardsTimelineData} />
+            </View>
           </GlassCard>
         )}
 
@@ -227,6 +238,7 @@ export function VaultDetailScreen() {
                   ~{yearlyEarnings.toFixed(2)} EURC
                 </Text>
               </View>
+              <EarningsProjectionChart data={earningsData} />
             </View>
           )}
 
@@ -318,6 +330,12 @@ const styles = StyleSheet.create({
   positionLabel: {
     ...typography.caption,
     marginTop: 2,
+  },
+  rewardsChartContainer: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
   },
   tabBar: {
     flexDirection: 'row',

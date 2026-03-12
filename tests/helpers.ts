@@ -9,8 +9,10 @@ import {
 import {
   createMint,
   createAssociatedTokenAccount,
+  createAssociatedTokenAccountInstruction,
   mintTo,
   getAssociatedTokenAddress,
+  getMint,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
@@ -21,12 +23,14 @@ export const VAULT_SEED = Buffer.from("vault");
 export const USER_STAKE_SEED = Buffer.from("user_stake");
 export const EPOCH_SEED = Buffer.from("epoch");
 export const VAULT_AUTHORITY_SEED = Buffer.from("vault_authority");
+export const PB_EURC_MINT_SEED = Buffer.from("pbeurc_mint");
+export const PB_EURC_MINT_AUTH_SEED = Buffer.from("pbeurc_mint_auth");
 
 // ── Constants ──────────────────────────────────────────────────────────
 export const EURC_DECIMALS = 6;
 export const ONE_EURC = 1_000_000; // 10^6
 export const PRECISION = BigInt("1000000000000"); // 10^12
-export const DEFAULT_EPOCH_DURATION = 7 * 24 * 60 * 60; // 7 days
+export const DEFAULT_EPOCH_DURATION = 48 * 60 * 60; // 48 hours
 export const DEFAULT_COOLDOWN = 24 * 60 * 60; // 1 day
 export const DEFAULT_CAPACITY = 10_000_000 * ONE_EURC; // 10M EURC
 
@@ -74,6 +78,26 @@ export function findEpochSnapshotPda(
   );
 }
 
+export function findPbEurcMintPda(
+  vaultConfig: PublicKey,
+  programId: PublicKey
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [PB_EURC_MINT_SEED, vaultConfig.toBuffer()],
+    programId
+  );
+}
+
+export function findPbMintAuthorityPda(
+  vaultConfig: PublicKey,
+  programId: PublicKey
+): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [PB_EURC_MINT_AUTH_SEED, vaultConfig.toBuffer()],
+    programId
+  );
+}
+
 // ── Test Setup Helpers ─────────────────────────────────────────────────
 export interface TestContext {
   program: Program<EurcVault>;
@@ -86,6 +110,8 @@ export interface TestContext {
   vaultAuthority: PublicKey;
   vaultAuthorityBump: number;
   vaultTokenAccount: PublicKey;
+  pbEurcMint: PublicKey;
+  pbMintAuthority: PublicKey;
 }
 
 export async function airdrop(
@@ -162,10 +188,29 @@ export async function setupTestVault(
     vaultConfig,
     program.programId
   );
+
+  // Create vault token ATA — must exist before initializeVault.
+  // Use manual instruction since vaultAuthority is a PDA (off-curve).
   const vaultTokenAccount = await getAssociatedTokenAddress(
     eurcMint,
     vaultAuthority,
-    true
+    true // allowOwnerOffCurve
+  );
+  const createAtaTx = new anchor.web3.Transaction().add(
+    createAssociatedTokenAccountInstruction(
+      authority.publicKey,
+      vaultTokenAccount,
+      vaultAuthority,
+      eurcMint
+    )
+  );
+  await provider.sendAndConfirm(createAtaTx, [authority]);
+
+  // Derive pbEURC PDAs (created on-chain by initializeVault)
+  const [pbEurcMint] = findPbEurcMintPda(vaultConfig, program.programId);
+  const [pbMintAuthority] = findPbMintAuthorityPda(
+    vaultConfig,
+    program.programId
   );
 
   await program.methods
@@ -181,10 +226,10 @@ export async function setupTestVault(
       vaultAuthority,
       eurcMint,
       vaultTokenAccount,
+      pbEurcMint,
+      pbMintAuthority,
       systemProgram: SystemProgram.programId,
       tokenProgram: TOKEN_PROGRAM_ID,
-      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-      rent: anchor.web3.SYSVAR_RENT_PUBKEY,
     })
     .signers([authority])
     .rpc();
@@ -200,16 +245,23 @@ export async function setupTestVault(
     vaultAuthority,
     vaultAuthorityBump,
     vaultTokenAccount,
+    pbEurcMint,
+    pbMintAuthority,
   };
 }
 
 export async function setupUserWithTokens(
   ctx: TestContext,
   amount: number = 1000 * ONE_EURC
-): Promise<{ user: Keypair; userTokenAccount: PublicKey }> {
+): Promise<{
+  user: Keypair;
+  userTokenAccount: PublicKey;
+  userPbTokenAccount: PublicKey;
+}> {
   const user = Keypair.generate();
   await airdrop(ctx.provider, user.publicKey);
 
+  // Create user's EURC token account and fund it
   const userTokenAccount = await createTestTokenAccount(
     ctx.provider,
     user,
@@ -224,13 +276,22 @@ export async function setupUserWithTokens(
     amount
   );
 
-  return { user, userTokenAccount };
+  // Create user's pbEURC token account
+  const userPbTokenAccount = await createTestTokenAccount(
+    ctx.provider,
+    user,
+    ctx.pbEurcMint,
+    user.publicKey
+  );
+
+  return { user, userTokenAccount, userPbTokenAccount };
 }
 
 export async function deposit(
   ctx: TestContext,
   user: Keypair,
   userTokenAccount: PublicKey,
+  userPbTokenAccount: PublicKey,
   amount: number
 ): Promise<void> {
   const [userStake] = findUserStakePda(
@@ -248,6 +309,9 @@ export async function deposit(
       vaultAuthority: ctx.vaultAuthority,
       vaultTokenAccount: ctx.vaultTokenAccount,
       userTokenAccount,
+      pbEurcMint: ctx.pbEurcMint,
+      pbMintAuthority: ctx.pbMintAuthority,
+      userPbTokenAccount,
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     })
@@ -298,19 +362,27 @@ export async function fundRewards(
 }
 
 // ── Invariant Checkers ─────────────────────────────────────────────────
-export async function checkVaultInvariant(
-  ctx: TestContext
-): Promise<void> {
-  const vaultData = await ctx.program.account.vaultConfig.fetch(ctx.vaultConfig);
+export async function checkVaultInvariant(ctx: TestContext): Promise<void> {
+  const vaultData = await ctx.program.account.vaultConfig.fetch(
+    ctx.vaultConfig
+  );
   const tokenBalance = await ctx.provider.connection.getTokenAccountBalance(
     ctx.vaultTokenAccount
   );
   const actualBalance = Number(tokenBalance.value.amount);
 
-  // Invariant 1: token account >= total_deposits
-  if (actualBalance < vaultData.totalDeposits.toNumber()) {
+  // Invariant 1: token account >= total_eurc_in_vault
+  if (actualBalance < vaultData.totalEurcInVault.toNumber()) {
     throw new Error(
-      `INVARIANT VIOLATED: token balance (${actualBalance}) < total_deposits (${vaultData.totalDeposits.toNumber()})`
+      `INVARIANT VIOLATED: token balance (${actualBalance}) < total_eurc_in_vault (${vaultData.totalEurcInVault.toNumber()})`
+    );
+  }
+
+  // Invariant 2: pbEURC mint supply == total_pb_eurc_supply
+  const mintInfo = await getMint(ctx.provider.connection, ctx.pbEurcMint);
+  if (Number(mintInfo.supply) !== vaultData.totalPbEurcSupply.toNumber()) {
+    throw new Error(
+      `INVARIANT VIOLATED: pbEURC supply (${mintInfo.supply}) != total_pb_eurc_supply (${vaultData.totalPbEurcSupply.toNumber()})`
     );
   }
 }

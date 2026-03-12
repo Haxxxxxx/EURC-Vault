@@ -1,10 +1,12 @@
 import { PublicKey } from "@solana/web3.js";
-import BN from "bn.js";
+import { BN } from "@coral-xyz/anchor";
 import {
   VAULT_SEED,
   USER_STAKE_SEED,
   EPOCH_SEED,
   VAULT_AUTHORITY_SEED,
+  PB_EURC_MINT_SEED,
+  PB_EURC_MINT_AUTH_SEED,
   PROGRAM_ID,
 } from "./constants";
 import type { PdaResult } from "./types";
@@ -84,6 +86,38 @@ export function findVaultAuthorityPda(
 ): PdaResult {
   const [publicKey, bump] = PublicKey.findProgramAddressSync(
     [VAULT_AUTHORITY_SEED, vault.toBuffer()],
+    programId,
+  );
+  return { publicKey, bump };
+}
+
+/**
+ * Derive the pbEURC mint PDA (per-vault receipt token).
+ *
+ * Seeds: `["pbeurc_mint", vault_config.key()]`
+ */
+export function findPbEurcMintPda(
+  vault: PublicKey,
+  programId: PublicKey = PROGRAM_ID,
+): PdaResult {
+  const [publicKey, bump] = PublicKey.findProgramAddressSync(
+    [PB_EURC_MINT_SEED, vault.toBuffer()],
+    programId,
+  );
+  return { publicKey, bump };
+}
+
+/**
+ * Derive the pbEURC mint authority PDA.
+ *
+ * Seeds: `["pbeurc_mint_auth", vault_config.key()]`
+ */
+export function findPbMintAuthorityPda(
+  vault: PublicKey,
+  programId: PublicKey = PROGRAM_ID,
+): PdaResult {
+  const [publicKey, bump] = PublicKey.findProgramAddressSync(
+    [PB_EURC_MINT_AUTH_SEED, vault.toBuffer()],
     programId,
   );
   return { publicKey, bump };

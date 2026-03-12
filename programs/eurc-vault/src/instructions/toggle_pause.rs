@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::VaultError;
+use crate::events::VaultPauseToggled;
 use crate::state::VaultConfig;
 
 #[derive(Accounts)]
@@ -21,7 +22,10 @@ pub fn handler(ctx: Context<TogglePause>) -> Result<()> {
     let vault = &mut ctx.accounts.vault_config;
     vault.paused = !vault.paused;
 
-    msg!("Vault paused: {}", vault.paused);
+    emit!(VaultPauseToggled {
+        vault: vault.key(),
+        paused: vault.paused,
+    });
 
     Ok(())
 }
