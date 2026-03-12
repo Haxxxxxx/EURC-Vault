@@ -117,11 +117,24 @@ Yield is implicit in the rising exchange rate — no separate claim transaction.
 
 ## What Was Built
 
+### File Count
+
+| Location | Files | Description |
+|----------|-------|-------------|
+| `ranger/bot/` | 17 TS files | Automation engine (rates, rebalancer, executor, risk, monitoring) |
+| `ranger/scripts/` | 4 TS files | One-time setup scripts (vault, adaptors, strategies, seed) |
+| `ranger/tests/` | 5 TS files | Unit test suites |
+| `ranger/app/src/` | 22 TS/TSX files | Next.js frontend (pages, components, hooks) |
+| `functions/src/ranger/` | 6 TS files | Firebase Cloud Functions (scheduled bots) |
+| `ranger/docs/` | 4 MD files | Strategy, risk, architecture, submission |
+| **Total** | **~68 source files** | Across ranger/ and functions/src/ranger/ |
+
 ### On-Chain / Vault Layer
 - Vault initialization script using `@voltr/vault-sdk` (`VoltrClient.createInitializeVaultIx`)
 - Adaptor registration for all three protocols (Drift, Kamino, Save/Lending)
 - Strategy initialization (protocol-specific lending positions)
 - Seed deposit script for initial liquidity
+- Real `VoltrClient` SDK calls wired throughout (Sprint 2 complete)
 
 ### Automation Bot (`ranger/bot/`)
 - **Rate fetchers**: Drift (spot market API), Kamino (klend-sdk), Save (reserve API)
@@ -132,6 +145,7 @@ Yield is implicit in the rising exchange rate — no separate claim transaction.
 - **Risk engine**: health score (0-100), drawdown tracking, concentration enforcement
 - **Circuit breaker**: emergency halt + full withdrawal to idle on >2% TVL drop
 - **Metrics**: time-weighted return (TWR) APY calculation, event tracking, Firestore write
+- **Remaining accounts helpers**: protocol-specific account resolvers for Drift/Kamino/Save
 
 ### Firebase Cloud Functions (`functions/src/ranger/`)
 - 5 scheduled Cloud Functions v2 (`onSchedule`) wired to Firestore
@@ -141,7 +155,7 @@ Yield is implicit in the rising exchange rate — no separate claim transaction.
 - APY snapshots in `ranger_metrics` (consumed by frontend)
 
 ### Frontend Dashboard (`ranger/app/`)
-- **4 pages**: Vault (hero + rates), Dashboard, Analytics, Deposit/Withdraw
+- **4 routes**: `/` (hero + rates), `/dashboard`, `/analytics`, `/deposit`
 - **Live rate comparison**: APY progress bars, BEST badge, spread indicator, pulsing live dot
 - **Allocation donut chart**: real-time Drift/Kamino/Save/Idle breakdown
 - **APY breakdown table**: per-protocol APY, utilization, allocation, blended footer
@@ -150,6 +164,7 @@ Yield is implicit in the rising exchange rate — no separate claim transaction.
 - **Analytics**: 7-day APY trend (4 Recharts lines), cumulative yield chart, earnings calculator
 - **Deposit/Withdraw page**: EURC input, pbEURC preview, position summary, fee disclosure
 - **Firestore live data + mock fallback** — fully functional demo without live vault
+- **Build**: Clean static prerender, 0 TypeScript errors
 
 ---
 
