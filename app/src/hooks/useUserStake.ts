@@ -1,82 +1,122 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { EURC_DECIMALS } from '@/lib/constants';
+import { useVaultClient } from '@/providers/VaultClientProvider';
+import { VAULT_REGISTRY, getVaultBySlug } from '@/lib/constants';
+import { sharesToEurc, PRECISION } from '@eurc-vault/sdk';
 
-export interface UserStakeData {
-  vaultId: string;
-  stakedAmount: number;
-  rewardsEarned: number;
-  sharePercentage: number;
-  cooldownStartTime: number | null;
-  cooldownEndTime: number | null;
+export interface UserPositionData {
+  slug: string;
+  /** pbEURC balance in base units (6 decimals) */
+  pbEurcBalance: number;
+  /** Position value in EURC base units (6 decimals) — shares * exchangeRate */
+  positionValueEurc: number;
+  /** Current exchange rate (raw, scaled by PRECISION) */
+  exchangeRate: number;
+  /** Pending withdrawal in EURC base units */
+  pendingWithdrawalEurc: number;
+  /** Shares burned at withdrawal initiation */
+  pendingWithdrawalShares: number;
+  withdrawalAvailableAt: number;
+  isInCooldown: boolean;
+  cooldownComplete: boolean;
 }
 
-export function useUserStake(vaultId?: string) {
+export function useUserStake(slug?: string) {
   const { publicKey, connected } = useWallet();
-  const [stake, setStake] = useState<UserStakeData | null>(null);
+  const { client } = useVaultClient();
+  const [stake, setStake] = useState<UserPositionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchStake = async () => {
-      if (!connected || !publicKey || !vaultId) {
+  const fetchStake = useCallback(async () => {
+    if (!connected || !publicKey || !slug || !client) {
+      setStake(null);
+      setLoading(false);
+      return;
+    }
+
+    const entry = getVaultBySlug(slug);
+    if (!entry) {
+      setStake(null);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [userStake, vaultConfig, pbBalance] = await Promise.all([
+        client.getUserStakeOrNull(entry.onChainId),
+        client.getVaultConfigOrNull(entry.onChainId),
+        client.getUserPbEurcBalance(entry.onChainId),
+      ]);
+
+      const pbEurcBalance = Number(pbBalance);
+      const pendingWithdrawalEurc = userStake ? userStake.pendingWithdrawalEurc.toNumber() : 0;
+      const pendingWithdrawalShares = userStake ? userStake.pendingWithdrawalShares.toNumber() : 0;
+
+      // No position if user has no shares and no pending withdrawal
+      if (pbEurcBalance === 0 && pendingWithdrawalEurc === 0) {
         setStake(null);
         setLoading(false);
         return;
       }
 
-      try {
-        setLoading(true);
-        setError(null);
+      const exchangeRate = vaultConfig
+        ? Number(vaultConfig.exchangeRate.toString())
+        : Number(PRECISION);
 
-        await new Promise((resolve) => setTimeout(resolve, 500));
+      // Calculate position value: shares * exchangeRate / PRECISION
+      const positionValueEurc = pbEurcBalance > 0
+        ? Number(sharesToEurc(BigInt(pbEurcBalance), BigInt(exchangeRate)))
+        : 0;
 
-        const mockStakedAmount = Math.floor(
-          (5000 + Math.random() * 45000) * Math.pow(10, EURC_DECIMALS)
-        );
-        const mockRewards = Math.floor(
-          (50 + Math.random() * 500) * Math.pow(10, EURC_DECIMALS)
-        );
+      const withdrawalAt = userStake ? userStake.withdrawalAvailableAt.toNumber() : 0;
+      const now = Math.floor(Date.now() / 1000);
+      const isInCooldown = pendingWithdrawalEurc > 0 && withdrawalAt > 0;
+      const cooldownComplete = isInCooldown && now >= withdrawalAt;
 
-        const hasCooldown = Math.random() > 0.7;
-        const cooldownStart = hasCooldown ? Date.now() - 2 * 24 * 60 * 60 * 1000 : null;
-        const cooldownEnd = hasCooldown ? Date.now() + 5 * 24 * 60 * 60 * 1000 : null;
+      setStake({
+        slug,
+        pbEurcBalance,
+        positionValueEurc,
+        exchangeRate,
+        pendingWithdrawalEurc,
+        pendingWithdrawalShares,
+        withdrawalAvailableAt: withdrawalAt,
+        isInCooldown,
+        cooldownComplete,
+      });
+    } catch {
+      // Account doesn't exist yet — new user
+      setStake(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [connected, publicKey, slug, client]);
 
-        setStake({
-          vaultId,
-          stakedAmount: mockStakedAmount,
-          rewardsEarned: mockRewards,
-          sharePercentage: 0.05 + Math.random() * 0.15,
-          cooldownStartTime: cooldownStart,
-          cooldownEndTime: cooldownEnd,
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch stake');
-      } finally {
-        setLoading(false);
-      }
-    };
-
+  useEffect(() => {
     fetchStake();
-  }, [connected, publicKey, vaultId]);
+  }, [fetchStake]);
 
-  return { stake, loading, error, refetch: () => {} };
+  return { stake, loading, error, refetch: fetchStake };
 }
 
 export function useUserPortfolio() {
   const { publicKey, connected } = useWallet();
+  const { client } = useVaultClient();
   const [portfolio, setPortfolio] = useState<{
-    totalStaked: number;
-    totalRewards: number;
+    totalPositionValue: number;
     activeVaults: number;
-    stakes: UserStakeData[];
+    positions: UserPositionData[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPortfolio = async () => {
-      if (!connected || !publicKey) {
+      if (!connected || !publicKey || !client) {
         setPortfolio(null);
         setLoading(false);
         return;
@@ -86,35 +126,69 @@ export function useUserPortfolio() {
         setLoading(true);
         setError(null);
 
-        await new Promise((resolve) => setTimeout(resolve, 700));
+        const results = await Promise.allSettled(
+          VAULT_REGISTRY.map(async (entry) => {
+            const [userStake, vaultConfig, pbBalance] = await Promise.all([
+              client.getUserStakeOrNull(entry.onChainId),
+              client.getVaultConfigOrNull(entry.onChainId),
+              client.getUserPbEurcBalance(entry.onChainId),
+            ]);
 
-        const mockStakes: UserStakeData[] = ['standard', 'premium'].map((vaultId) => ({
-          vaultId,
-          stakedAmount: Math.floor((10000 + Math.random() * 40000) * Math.pow(10, EURC_DECIMALS)),
-          rewardsEarned: Math.floor((100 + Math.random() * 900) * Math.pow(10, EURC_DECIMALS)),
-          sharePercentage: 0.05 + Math.random() * 0.15,
-          cooldownStartTime: null,
-          cooldownEndTime: null,
-        }));
+            const pbEurcBalance = Number(pbBalance);
+            const pendingEurc = userStake ? userStake.pendingWithdrawalEurc.toNumber() : 0;
+            const pendingShares = userStake ? userStake.pendingWithdrawalShares.toNumber() : 0;
 
-        const totalStaked = mockStakes.reduce((sum, s) => sum + s.stakedAmount, 0);
-        const totalRewards = mockStakes.reduce((sum, s) => sum + s.rewardsEarned, 0);
+            if (pbEurcBalance === 0 && pendingEurc === 0) return null;
+
+            const exchangeRate = vaultConfig
+              ? Number(vaultConfig.exchangeRate.toString())
+              : Number(PRECISION);
+
+            const positionValueEurc = pbEurcBalance > 0
+              ? Number(sharesToEurc(BigInt(pbEurcBalance), BigInt(exchangeRate)))
+              : 0;
+
+            const withdrawalAt = userStake ? userStake.withdrawalAvailableAt.toNumber() : 0;
+            const now = Math.floor(Date.now() / 1000);
+
+            return {
+              slug: entry.slug,
+              pbEurcBalance,
+              positionValueEurc,
+              exchangeRate,
+              pendingWithdrawalEurc: pendingEurc,
+              pendingWithdrawalShares: pendingShares,
+              withdrawalAvailableAt: withdrawalAt,
+              isInCooldown: pendingEurc > 0 && withdrawalAt > 0,
+              cooldownComplete: pendingEurc > 0 && withdrawalAt > 0 && now >= withdrawalAt,
+            } as UserPositionData;
+          }),
+        );
+
+        const positions = results
+          .map((r) => (r.status === 'fulfilled' ? r.value : null))
+          .filter((s): s is UserPositionData => s !== null);
+
+        const totalPositionValue = positions.reduce(
+          (sum, p) => sum + p.positionValueEurc + p.pendingWithdrawalEurc,
+          0,
+        );
 
         setPortfolio({
-          totalStaked,
-          totalRewards,
-          activeVaults: mockStakes.length,
-          stakes: mockStakes,
+          totalPositionValue,
+          activeVaults: positions.length,
+          positions,
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch portfolio');
+        setPortfolio(null);
       } finally {
         setLoading(false);
       }
     };
 
     fetchPortfolio();
-  }, [connected, publicKey]);
+  }, [connected, publicKey, client]);
 
   return { portfolio, loading, error };
 }

@@ -1,18 +1,21 @@
 import { useState, useEffect } from 'react';
-import { EPOCH_DURATION } from '@/lib/constants';
+import { useVault } from '@/hooks/useVault';
+import { getEpochTimeRemaining } from '@eurc-vault/sdk';
 import { formatCountdown } from '@/lib/utils';
 
-export function useEpochCountdown() {
+export function useEpochCountdown(slug?: string) {
+  const { vault } = useVault(slug);
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
-  const [epochNumber, setEpochNumber] = useState<number>(1);
+
+  const epochStartTime = vault?.epochStartTime ?? 0;
+  const epochDuration = vault?.epochDuration ?? 604_800;
+  const epochNumber = vault?.currentEpoch ?? 1;
 
   useEffect(() => {
-    const mockEpochStart = Date.now() - 15 * 24 * 60 * 60 * 1000;
-    const mockEpochEnd = mockEpochStart + EPOCH_DURATION * 1000;
+    if (!epochStartTime || !epochDuration) return;
 
     const updateCountdown = () => {
-      const now = Date.now();
-      const remaining = Math.max(0, Math.floor((mockEpochEnd - now) / 1000));
+      const remaining = getEpochTimeRemaining(epochStartTime, epochDuration);
       setSecondsRemaining(remaining);
     };
 
@@ -20,7 +23,7 @@ export function useEpochCountdown() {
     const interval = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [epochStartTime, epochDuration]);
 
   const formatted = formatCountdown(secondsRemaining);
 
@@ -28,5 +31,7 @@ export function useEpochCountdown() {
     secondsRemaining,
     epochNumber,
     formatted,
+    epochDuration,
+    epochStartTime,
   };
 }
