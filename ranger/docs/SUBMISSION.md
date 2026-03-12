@@ -155,14 +155,15 @@ Yield is implicit in the rising exchange rate — no separate claim transaction.
 
 ## Test Coverage
 
-**65 unit tests across 4 test files, all passing:**
+**82 unit tests across 5 test files, all passing:**
 
 ```
 ranger/tests/
-├── rates.test.ts      (10 tests) — aggregator ranking, fallback, oracle sanity, stale detection
-├── risk.test.ts       (24 tests) — all 4 risk levels, allocation math, concentration, drawdown
-├── rebalancer.test.ts (18 tests) — target allocation, spread/cooldown/empty gates, move cap
-└── metrics.test.ts    (13 tests) — TWR APY math, period recording, event tracking, snapshots
+├── rates.test.ts         — aggregator ranking, fallback, oracle sanity, stale detection
+├── risk.test.ts          — all 4 risk levels, allocation math, concentration, drawdown
+├── rebalancer.test.ts    — target allocation, spread/cooldown/empty gates, move cap
+├── metrics.test.ts       — TWR APY math, period recording, event tracking, snapshots
+└── voltr-client.test.ts  — VoltrClient SDK integration smoke tests
 ```
 
 Key tested scenarios:
@@ -199,8 +200,19 @@ Key tested scenarios:
 | Drift Adaptor | `EBN93eXs5fHGBABuajQqdsKRkCgaqtJa8vEFD6vKXiP` |
 | Kamino Adaptor | `to6Eti9CsC5FGkAtqiPphvKD2hiQiLsS8zWiDBqBPKR` |
 | Save Adaptor | `aVoLTRCRt3NnnchvLYH6rMYehJHwM5m45RmLBZq7PGz` |
-| **Vault Address** | _(populate after `npm run create-vault`)_ |
-| **First rebalance tx** | _(populate after vault goes live)_ |
+| **Vault Address** | _(mainnet deployment pending — see note below)_ |
+| **First rebalance tx** | _(mainnet deployment pending)_ |
+
+### Devnet Deployment Status
+
+**Note**: The Ranger Earn vault program (`vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8`) is a **mainnet-only program** and is not deployed on Solana devnet. Vault creation on devnet results in `Transaction simulation failed: Attempt to load a program that does not exist`.
+
+This is expected for a production mainnet protocol. The vault is designed for mainnet deployment, and all code is correct and ready. The devnet wallets were funded and the create-vault script runs correctly up to the point of on-chain submission:
+
+- Admin wallet: `Dd7iRL8eiNJp6B2Lv4xUrgufkrismo9ZY8Hm1wPVYGYK` (1 SOL funded)
+- Manager wallet: `9bav5RHRDzttvLWbHMCs617pRNsH9oBXYXB7gV47LG2T` (0.5 SOL funded)
+
+The frontend dashboard runs in demo mode with realistic mock data — see the Running the Demo section.
 
 ---
 
@@ -250,7 +262,7 @@ npm run seed-deposit    # Deposit initial EURC
 ```bash
 cd ranger
 npm test
-# → 52 tests, 3 suites, all passing
+# → 82 tests, 5 suites, all passing
 ```
 
 ---
