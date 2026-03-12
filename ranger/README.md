@@ -201,9 +201,11 @@ Both should exit clean.
 | 1. Foundation (scaffold, scripts, rate fetching) | ✅ Complete |
 | 2. Bot engine (rebalancer, compounder, risk, circuit breaker) | ✅ Complete |
 | 3. Firebase Cloud Functions | ✅ Complete |
-| 4. Frontend dashboard | 🔄 In Progress |
+| 4. Frontend dashboard (5 routes, static build) | ✅ Complete |
 | 5. Documentation | ✅ Complete |
-| Devnet testing | Blocked (need funded keypairs) |
+| 6. Real SDK wiring (VoltrClient calls) | ✅ Complete |
+| 7. Unit tests (82 tests, 5 suites) | ✅ Complete |
+| Devnet testing | ⚠️ Blocked — Voltr program is mainnet-only |
 
 ## License
 
