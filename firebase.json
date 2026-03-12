@@ -1,0 +1,19 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "eurc-vault",
+      "runtime": "nodejs20",
+      "predeploy": [
+        "npm run build -w packages/sdk",
+        "npm --prefix functions run build"
+      ]
+    }
+  ],
+  "firestore": {
+    "database": "(default)",
+    "location": "europe-west",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

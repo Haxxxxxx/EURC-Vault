@@ -1,0 +1,83 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users: owner can read their own doc; all writes via Cloud Functions (admin SDK)
+    match /users/{wallet} {
+      allow read: if request.auth != null && request.auth.uid == wallet;
+      allow write: if false; // Cloud Functions only
+
+      // Transactions subcollection: owner read-only
+      match /transactions/{txId} {
+        allow read: if request.auth != null && request.auth.uid == wallet;
+        allow write: if false;
+      }
+    }
+
+    // Notifications: owner can read and update `read` field only
+    match /notifications/{notifId} {
+      allow read: if request.auth != null
+        && resource.data.recipientWallet == request.auth.uid;
+      allow update: if request.auth != null
+        && resource.data.recipientWallet == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow create, delete: if false;
+    }
+
+    // Leaderboard: public read, Cloud Functions write
+    match /leaderboard/{wallet} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Referrals: public read (for code validation), Cloud Functions write
+    match /referrals/{code} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Epochs: public read, Cloud Functions write
+    match /epochs/{epochId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Nonces: Cloud Functions only (no client access)
+    match /nonces/{nonceId} {
+      allow read, write: if false;
+    }
+
+    // Indexer state: Cloud Functions only
+    match /indexer_state/{stateId} {
+      allow read, write: if false;
+    }
+
+    // Strategies: public read, Cloud Functions write
+    match /strategies/{strategyId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Strategy snapshots: public read, Cloud Functions write
+    match /strategy_snapshots/{snapshotId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Faucet rate limits: Cloud Functions only
+    match /faucet_limits/{wallet} {
+      allow read, write: if false;
+    }
+
+    // Admin transaction audit trail: Cloud Functions only
+    match /admin_transactions/{txId} {
+      allow read, write: if false;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
