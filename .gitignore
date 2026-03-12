@@ -1,0 +1,50 @@
+# Rust / Anchor
+target/
+**/*.rs.bk
+.anchor/
+
+# Node
+node_modules/
+.next/
+.expo/
+dist/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Test
+test-ledger/
+coverage/
+
+# Build artifacts
+*.tsbuildinfo
+
+# Ralph internal tooling (never commit)
+.ralph/
+.ralphrc
+
+# Keypair files (NEVER commit private keys)
+ranger/keys/
+keys/
+*.keypair.json
+
+# Firebase debug logs
+firebase-debug.log
+ui-debug.log
+database-debug.log
+
+# Zip archives
+*.zip
+
+# Package manager lockfiles (subdirectories)
+ranger/app/tsconfig.tsbuildinfo

@@ -1,0 +1,23 @@
+{
+  "name": "eurc-vault",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EURC staking vault on Solana — Anchor program, Next.js dashboard, React Native mobile",
+  "workspaces": [
+    "packages/*",
+    "app",
+    "mobile"
+  ],
+  "scripts": {
+    "build:program": "anchor build",
+    "test:program": "anchor test",
+    "build:sdk": "npm run build -w packages/sdk",
+    "dev:web": "npm run dev -w app",
+    "dev:mobile": "npm run start -w mobile",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

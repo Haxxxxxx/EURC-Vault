@@ -1,0 +1,86 @@
+@import 'tailwindcss';
+
+@layer base {
+  :root {
+    --background: #F5F3EF;
+    --background-surface: #FFFFFF;
+    --foreground: #1A1D26;
+    --foreground-secondary: #6B7080;
+    --primary: #003399;
+    --primary-hover: #0044CC;
+    --success: #059669;
+    --warning: #F59E0B;
+    --error: #EF4444;
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(0, 0, 0, 0.06);
+  }
+
+  .dark {
+    --background: #0A0E1A;
+    --background-surface: #141929;
+    --foreground: #F0F2F5;
+    --foreground-secondary: #8A8F9E;
+    --primary: #003399;
+    --primary-hover: #0044CC;
+    --success: #10B981;
+    --warning: #F59E0B;
+    --error: #EF4444;
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-medium;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .backdrop-blur-glass {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+}
+
+.wallet-adapter-button {
+  font-family: inherit !important;
+}
+
+.wallet-adapter-modal-wrapper {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.wallet-adapter-modal {
+  background: var(--background-surface) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 1rem !important;
+}
+
+.wallet-adapter-modal-title {
+  color: var(--foreground) !important;
+  font-weight: 500 !important;
+}
+
+.wallet-adapter-modal-list li {
+  background: var(--glass-bg) !important;
+  border: 1px solid var(--glass-border) !important;
+  border-radius: 0.75rem !important;
+  backdrop-filter: blur(20px);
+}
+
+.wallet-adapter-modal-list li:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
