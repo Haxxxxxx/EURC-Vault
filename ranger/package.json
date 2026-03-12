@@ -1,0 +1,37 @@
+{
+  "name": "@eurc-vault/ranger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "EURC Cross-Protocol Yield Optimizer — Ranger Build-A-Bear Hackathon",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "bot": "tsx bot/index.ts",
+    "create-vault": "tsx scripts/create-vault.ts",
+    "add-adaptors": "tsx scripts/add-adaptors.ts",
+    "init-strategies": "tsx scripts/init-strategies.ts",
+    "seed-deposit": "tsx scripts/seed-deposit.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "@drift-labs/sdk": "^2.107.0",
+    "@kamino-finance/klend-sdk": "^3.2.0",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.95.0",
+    "@voltr/vault-sdk": "^0.2.0",
+    "bn.js": "^5.2.1",
+    "dotenv": "^16.4.0",
+    "firebase-admin": "^12.0.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.5",
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^2.0.0"
+  }
+}
