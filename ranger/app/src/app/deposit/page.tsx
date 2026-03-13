@@ -131,15 +131,25 @@ function OutputPreview({
   amount,
   tokenLabel,
   subtext,
+  tooltip,
 }: {
   amount: number | null;
   tokenLabel: string;
   subtext: string;
+  tooltip?: string;
 }) {
   return (
     <div className="rounded-xl border border-border bg-secondary/10 p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-medium text-muted-foreground">You receive</span>
+        {tooltip && (
+          <span className="group relative">
+            <Info className="h-3.5 w-3.5 text-muted-foreground/50 hover:text-muted-foreground cursor-help transition-colors" />
+            <span className="invisible group-hover:visible absolute right-0 bottom-full mb-2 w-56 rounded-lg bg-card border border-border p-2.5 text-[11px] text-muted-foreground leading-relaxed shadow-lg z-10">
+              {tooltip}
+            </span>
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <span className="flex-1 text-2xl font-bold tabular-nums text-muted-foreground">
@@ -454,12 +464,14 @@ export default function DepositPage() {
                 amount={depositPreview}
                 tokenLabel="pbEURC"
                 subtext={`Yield-bearing vault shares at 1 EURC = ${(1 / exchangeRate).toFixed(4)} pbEURC`}
+                tooltip="pbEURC are yield-bearing receipt tokens. As the vault earns yield through rate arbitrage and compounding, the exchange rate grows — meaning your pbEURC shares are worth more EURC over time. No manual claiming needed."
               />
             ) : (
               <OutputPreview
                 amount={parsedAmount > 0 ? parsedAmount : null}
                 tokenLabel="EURC"
                 subtext={`Burns ${withdrawPreview !== null ? withdrawPreview.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—'} pbEURC at current exchange rate`}
+                tooltip="Withdrawing burns your pbEURC shares and returns EURC at the current exchange rate. Since the rate grows over time, you receive more EURC than you originally deposited."
               />
             )}
 

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, TrendingUp, Shield, Zap, BarChart3 } from 'lucide-react';
+import { ArrowRight, TrendingUp, Shield, Zap, BarChart3, ArrowRightLeft } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 import { RateComparison } from '@/components/dashboard/RateComparison';
 import { useRangerRates } from '@/hooks/useRangerRates';
@@ -41,6 +41,63 @@ function StatCard({
   );
 }
 
+/** Animated protocol flow visualization for the hero section */
+function ProtocolFlowVisual() {
+  return (
+    <div className="flex items-center justify-center gap-3 sm:gap-5 py-8">
+      {/* EURC source */}
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-card border border-border shadow-lg">
+          <span className="text-lg sm:text-xl font-bold text-foreground">€</span>
+        </div>
+        <span className="text-[10px] sm:text-xs font-medium text-muted-foreground">EURC</span>
+      </div>
+
+      {/* Animated arrows */}
+      <div className="flex flex-col items-center gap-0.5">
+        <ArrowRightLeft className="h-5 w-5 text-primary animate-pulse" />
+        <span className="text-[9px] text-primary font-medium">AUTO</span>
+      </div>
+
+      {/* Protocol nodes */}
+      <div className="flex flex-col items-center gap-2.5">
+        {(['drift', 'kamino', 'save'] as const).map((id) => (
+          <div key={id} className="flex items-center gap-2">
+            <div
+              className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl border border-border shadow-md"
+              style={{ backgroundColor: `${PROTOCOL_META[id].color}15` }}
+            >
+              <span
+                className="text-xs sm:text-sm font-bold"
+                style={{ color: PROTOCOL_META[id].color }}
+              >
+                {PROTOCOL_META[id].label.charAt(0)}
+              </span>
+            </div>
+            <div className="hidden sm:flex flex-col">
+              <span className="text-xs font-medium text-foreground">{PROTOCOL_META[id].label}</span>
+              <span className="text-[10px] text-muted-foreground">Lending</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Arrow to yield */}
+      <div className="flex flex-col items-center gap-0.5">
+        <ArrowRight className="h-5 w-5 text-emerald-400" />
+      </div>
+
+      {/* Yield output */}
+      <div className="flex flex-col items-center gap-1.5">
+        <div className="flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 shadow-lg shadow-emerald-500/5">
+          <span className="text-base sm:text-lg font-bold text-emerald-400">APY</span>
+        </div>
+        <span className="text-[10px] sm:text-xs font-semibold text-emerald-400">12-15%</span>
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const { rates, loading: ratesLoading } = useRangerRates();
   const { metrics, loading: metricsLoading } = useRangerMetrics();
@@ -48,7 +105,6 @@ export default function HomePage() {
   const loading = ratesLoading || metricsLoading;
 
   const currentApy = metrics?.currentApyPct ?? null;
-  const tvl = metrics?.tvlEurc ?? null;
   const bestProtocol = rates?.best ?? null;
   const spreadBps = rates?.spreadBps ?? metrics?.spreadBps ?? null;
   const healthScore = metrics?.healthScore ?? null;
@@ -82,8 +138,11 @@ export default function HomePage() {
             The bot continuously monitors rates and rebalances to always chase the highest APY.
           </p>
 
+          {/* Protocol flow visualization */}
+          <ProtocolFlowVisual />
+
           {/* CTA */}
-          <div className="mt-8 flex items-center justify-center gap-4 flex-wrap">
+          <div className="flex items-center justify-center gap-4 flex-wrap">
             <Link
               href="/deposit"
               className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary-hover transition-colors shadow-lg shadow-primary/20"
@@ -177,7 +236,7 @@ export default function HomePage() {
                 <h3 className="font-semibold text-foreground">Auto-Compound</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Earned interest is automatically compounded back into the vault, maximizing long-term yield without manual intervention.
+                Earned interest is automatically compounded back into the vault hourly, maximizing long-term yield through the power of compounding.
               </p>
             </div>
 
@@ -189,7 +248,44 @@ export default function HomePage() {
                 <h3 className="font-semibold text-foreground">Circuit Breaker</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Built-in safety system pauses rebalancing during anomalous market conditions, protecting deposited capital.
+                Built-in safety system halts all activity if TVL drops more than 2% from peak, pulling funds back to idle to protect capital.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* How it works section */}
+        <div className="mt-14 text-center">
+          <h2 className="text-xl font-bold text-foreground mb-2">How It Works</h2>
+          <p className="text-sm text-muted-foreground mb-8 max-w-xl mx-auto">
+            Deposit EURC and receive pbEURC — yield-bearing receipt tokens that grow in value as the vault earns.
+          </p>
+          <div className="grid sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
+            <div className="rounded-2xl border border-border bg-card p-5 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mx-auto mb-3">
+                <span className="text-sm font-bold text-primary">1</span>
+              </div>
+              <h3 className="text-sm font-semibold text-foreground mb-1">Deposit EURC</h3>
+              <p className="text-xs text-muted-foreground">
+                Connect your wallet and deposit EURC into the vault. You receive pbEURC shares in return.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card p-5 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-500/10 mx-auto mb-3">
+                <span className="text-sm font-bold text-violet-400">2</span>
+              </div>
+              <h3 className="text-sm font-semibold text-foreground mb-1">Bot Optimizes</h3>
+              <p className="text-xs text-muted-foreground">
+                The bot monitors rates across Drift, Kamino, and Save — rebalancing to the highest-yield protocol automatically.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-card p-5 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 mx-auto mb-3">
+                <span className="text-sm font-bold text-emerald-400">3</span>
+              </div>
+              <h3 className="text-sm font-semibold text-foreground mb-1">Earn Yield</h3>
+              <p className="text-xs text-muted-foreground">
+                Your pbEURC shares grow in value. Withdraw anytime to receive more EURC than you deposited — no claiming needed.
               </p>
             </div>
           </div>

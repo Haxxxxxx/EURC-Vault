@@ -21,13 +21,13 @@ export function Navbar() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Left: Brand */}
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20 group-hover:bg-primary/20 transition-colors">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-emerald-500/20 ring-1 ring-primary/20 group-hover:ring-primary/40 transition-all">
               <Zap className="h-4 w-4 text-primary" />
             </div>
             <div className="flex flex-col leading-none">
-              <span className="text-sm font-semibold text-foreground">EURC Optimizer</span>
-              <span className="text-[10px] text-muted-foreground">by Ranger</span>
+              <span className="text-sm font-semibold text-foreground tracking-tight">EURC Optimizer</span>
+              <span className="text-[10px] font-medium text-primary/70">Ranger Earn Vault</span>
             </div>
           </Link>
 
