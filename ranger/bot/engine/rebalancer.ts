@@ -85,7 +85,7 @@ export function computeTargetAllocation(
   const total = target.drift + target.kamino + target.save + target.idle;
   if (Math.abs(total - 1.0) > 0.001) {
     const excess = total - 1.0;
-    target.idle -= excess;
+    target.idle = Math.max(0, target.idle - excess);
   }
 
   return target;

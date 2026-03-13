@@ -63,7 +63,7 @@ Yield is implicit in the rising exchange rate — no separate claim transaction.
 |----------|------|------------|
 | Best-rate protocol | Primary | Up to 70% |
 | Each other protocol | Diversification floor | Min 10% |
-| Idle (withdrawal buffer) | Liquidity | ~10% |
+| Idle (withdrawal buffer) | Liquidity | ~5% |
 
 ### Risk Controls
 
@@ -290,7 +290,7 @@ npm test
 
 3. **Production-quality risk management** — Oracle sanity checks, concentration limits, circuit breaker, per-cycle move caps. The bot won't blow up on edge cases.
 
-4. **Tested** — 65 unit tests covering the strategy's critical paths. Most hackathon submissions have zero tests.
+4. **Tested** — 82 unit tests covering the strategy's critical paths. Most hackathon submissions have zero tests.
 
 5. **Clean code** — TypeScript strict mode, ESM, typed errors, no magic numbers (all in `config.ts`). A new contributor could understand and extend this in an afternoon.
 

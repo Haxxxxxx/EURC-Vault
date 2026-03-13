@@ -248,7 +248,7 @@ export const rangerHealthCheck = onSchedule(
 
     // ── 3. Estimate TVL and allocation ───────────────────────────────────────
     // TODO: Replace with real VoltrClient.getVaultState()
-    const tvlEurc = state.peakTvlEurc > 0 ? state.peakTvlEurc * 0.99 : 100_000;
+    const tvlEurc = state.peakTvlEurc > 0 ? state.peakTvlEurc : 100_000;
     const peakTvlEurc = Math.max(state.peakTvlEurc, tvlEurc);
     const allocation: Record<ProtocolId, number> = {
       drift: 0.50,

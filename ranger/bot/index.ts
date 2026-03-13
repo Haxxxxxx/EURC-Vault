@@ -28,6 +28,7 @@ import { executeRebalance, emergencyWithdrawAll } from './engine/executor.js';
 import { assessRisk }           from './engine/risk.js';
 import * as cb                  from './engine/circuit-breaker.js';
 import { runCompound, shouldCompound, setLastRecordedTvl } from './engine/compounder.js';
+import { fetchVaultState } from './engine/vault-reader.js';
 import { generateSnapshot }     from './monitoring/metrics.js';
 import { recordRebalanceEvent, recordCompoundEvent } from './monitoring/metrics.js';
 import { sendAlert, alertRiskWarning } from './monitoring/alerts.js';
@@ -56,14 +57,12 @@ function getMockVaultState(): VaultState {
   };
 }
 
-async function getVaultState(_connection: Connection): Promise<VaultState> {
+async function getVaultState(connection: Connection): Promise<VaultState> {
   if (!VAULT_ADDRESS) {
     log.warn('VAULT_ADDRESS not set — using mock vault state');
     return getMockVaultState();
   }
-  // TODO: const voltr = new VoltrClient(connection, ...);
-  // TODO: return voltr.getVaultState(new PublicKey(VAULT_ADDRESS));
-  return getMockVaultState();
+  return fetchVaultState(connection);
 }
 
 // ─── Bot loop tasks ───────────────────────────────────────────────────────────

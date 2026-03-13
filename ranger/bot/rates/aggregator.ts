@@ -118,6 +118,8 @@ export async function fetchAllRates(connection?: Connection): Promise<Aggregated
       if (lastGood !== null) {
         return { ...rate, apy: lastGood, apyBps: Math.round(lastGood * 10_000), isStale: true };
       }
+      // No lastGood available (< 3 samples) — mark stale rather than pass through silently
+      return { ...rate, isStale: true };
     }
     return rate;
   };

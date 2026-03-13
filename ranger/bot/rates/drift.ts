@@ -62,10 +62,14 @@ function mockDriftRate(): ProtocolRate {
 export async function fetchDriftRate(connection?: Connection): Promise<ProtocolRate> {
   const conn = connection ?? new Connection(SOLANA_RPC_URL, 'confirmed');
 
+  // Hoist outside try so catch can call unsubscribe() and avoid websocket leaks
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let driftClient: DriftClient | undefined;
+
   try {
     // Drift SDK ships its own @solana/web3.js — cast to avoid version mismatch on Connection
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const driftClient = new DriftClient({
+    driftClient = new DriftClient({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       connection: conn as any,
       wallet: {
@@ -102,6 +106,8 @@ export async function fetchDriftRate(connection?: Connection): Promise<ProtocolR
     });
     return rate;
   } catch (err) {
+    // Ensure subscription is cleaned up to avoid websocket leaks
+    await driftClient?.unsubscribe().catch(() => {});
     log.error('Failed to fetch Drift rate', err);
     return mockDriftRate();
   }

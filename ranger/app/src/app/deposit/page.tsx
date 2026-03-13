@@ -21,7 +21,7 @@ import {
 } from '@solana/web3.js';
 import BN from 'bn.js';
 import { VoltrClient } from '@voltr/vault-sdk';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Navbar } from '@/components/layout/Navbar';
 import { useRangerMetrics } from '@/hooks/useRangerMetrics';
 import { VAULT_ADDRESS, EURC_MINT, EURC_PRECISION } from '@/lib/constants';
@@ -186,11 +186,11 @@ export default function DepositPage() {
         const { vaultLpMint } = client.findVaultAddresses(vaultPubkey);
         const eurcAta = PublicKey.findProgramAddressSync(
           [publicKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), EURC_MINT.toBuffer()],
-          new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJe8bXh'),
+          ASSOCIATED_TOKEN_PROGRAM_ID,
         )[0];
         const lpAta = PublicKey.findProgramAddressSync(
           [publicKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), vaultLpMint.toBuffer()],
-          new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJe8bXh'),
+          ASSOCIATED_TOKEN_PROGRAM_ID,
         )[0];
 
         const [eurcInfo, lpInfo] = await Promise.all([
@@ -312,9 +312,13 @@ export default function DepositPage() {
         );
       }
 
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       const tx    = new Transaction().add(ix);
       const txSig = await sendTransaction(tx, connection, { skipPreflight: false });
-      await connection.confirmTransaction(txSig, 'confirmed');
+      await connection.confirmTransaction(
+        { signature: txSig, blockhash, lastValidBlockHeight },
+        'confirmed',
+      );
 
       setTxState({ status: 'success', txSig, amount: parsedAmount, tab });
       setAmount('');
@@ -526,7 +530,7 @@ export default function DepositPage() {
                     {tab === 'deposit' ? 'Depositing…' : 'Withdrawing…'}
                   </span>
                 ) : !isVaultLive ? (
-                  'Vault Not Deployed'
+                  'Try Demo Deposit'
                 ) : !isAmountValid && parsedAmount > 0 ? (
                   'Insufficient Balance'
                 ) : tab === 'deposit' ? (

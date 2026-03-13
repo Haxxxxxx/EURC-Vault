@@ -160,8 +160,14 @@ export const rangerCheckRebalance = onSchedule(
     }
 
     // ── 6. Compute target allocation ─────────────────────────────────────────
-    // Mock current allocation (50/30/15/5) — TODO: read from Voltr vault state
-    const currentAlloc: Allocation = { drift: 0.50, kamino: 0.30, save: 0.15, idle: 0.05 };
+    // Equal-split baseline — honest for demo mode (no live vault state yet)
+    const equalSplit = (1 - IDLE_RESERVE_PCT) / 3;
+    const currentAlloc: Allocation = {
+      drift: equalSplit,
+      kamino: equalSplit,
+      save: equalSplit,
+      idle: IDLE_RESERVE_PCT,
+    };
     const targetAlloc = computeTargetAllocation(rates);
 
     const currentApy = blendedApy(currentAlloc, rates);

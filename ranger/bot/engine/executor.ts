@@ -101,12 +101,19 @@ function getManagerKeypair(): Keypair {
 
 // ─── Transaction helpers ──────────────────────────────────────────────────────
 
+/**
+ * Send with retry — rebuilds the transaction with a fresh blockhash on every
+ * attempt so expired-blockhash rejections (~90s TTL) don't permanently fail.
+ */
 async function sendWithRetry(
   connection: Connection,
-  tx: VersionedTransaction,
+  manager: Keypair,
+  instructions: TransactionInstruction[],
   retries = MAX_RETRIES,
 ): Promise<string> {
   for (let attempt = 1; attempt <= retries; attempt++) {
+    // Fresh blockhash on every attempt — avoids expired-blockhash rejections
+    const tx = await buildAndSign(connection, manager, instructions);
     try {
       const sig = await connection.sendTransaction(tx, {
         skipPreflight:       false,
@@ -116,8 +123,9 @@ async function sendWithRetry(
 
       log.debug('Transaction sent', { sig, attempt });
 
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       const result = await connection.confirmTransaction(
-        { signature: sig, ...(await connection.getLatestBlockhash()) },
+        { signature: sig, blockhash, lastValidBlockHeight },
         'confirmed',
       );
 
@@ -272,8 +280,7 @@ export async function executeRebalance(
     },
   );
 
-  const tx = await buildAndSign(conn, manager, [withdrawIx, depositIx]);
-  return sendWithRetry(conn, tx);
+  return sendWithRetry(conn, manager, [withdrawIx, depositIx]);
 }
 
 /**
@@ -337,8 +344,7 @@ export async function emergencyWithdrawAll(
     },
   );
 
-  const tx = await buildAndSign(conn, manager, [withdrawIx]);
-  return sendWithRetry(conn, tx);
+  return sendWithRetry(conn, manager, [withdrawIx]);
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────

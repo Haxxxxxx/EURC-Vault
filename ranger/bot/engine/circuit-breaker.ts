@@ -70,19 +70,23 @@ export async function evaluate(
     return false;
   }
 
-  updatePeakTvl(vaultState.totalAssets);
-
   const shouldTrip =
     riskState.level === 'EMERGENCY' ||
     riskState.drawdownPercent >= CIRCUIT_BREAKER_DRAWDOWN_PCT;
 
-  if (!shouldTrip) return false;
+  if (!shouldTrip) {
+    // Only update peak when we are NOT tripping so riskState_drawdown() logs correctly
+    updatePeakTvl(vaultState.totalAssets);
+    return false;
+  }
 
   const reason = riskState.drawdownPercent >= CIRCUIT_BREAKER_DRAWDOWN_PCT
     ? `Drawdown ${(riskState.drawdownPercent * 100).toFixed(2)}% >= limit ${CIRCUIT_BREAKER_DRAWDOWN_PCT * 100}%`
     : 'Risk level EMERGENCY';
 
   await trip(reason, vaultState);
+  // Update peak AFTER trip so riskState_drawdown() inside trip() logs the correct value
+  updatePeakTvl(vaultState.totalAssets);
   return true;
 }
 

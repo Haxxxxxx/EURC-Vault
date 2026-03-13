@@ -184,7 +184,7 @@ describe('remaining-accounts helpers — shape validation', () => {
 
   it('getKaminoStrategyAddress returns the reserve address itself', async () => {
     const { getKaminoStrategyAddress } = await import('../bot/utils/remaining-accounts.js');
-    const reserve  = new PublicKey('D6q6wuQSrifJKZYpR1M8R4Yawn LDtDsMmWM1NbBmgJ59'.replace(' ', ''));
+    const reserve  = new PublicKey('D6q6wuQSrifJKZYpR1M8R4YawnLDtDsMmWM1NbBmgJ59');
     const strategy = getKaminoStrategyAddress(reserve);
     expect(strategy.toBase58()).toBe(reserve.toBase58());
   });
