@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { TrendingUp, ArrowRightLeft, Layers, Activity } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 import { ApyTrendChart } from '@/components/analytics/ApyTrendChart';
 import { CumulativeYieldChart } from '@/components/analytics/CumulativeYieldChart';
@@ -7,9 +9,14 @@ import { EarningsCalculator } from '@/components/analytics/EarningsCalculator';
 import { useMetricsHistory } from '@/hooks/useMetricsHistory';
 import { useRangerMetrics } from '@/hooks/useRangerMetrics';
 
+const DEPOSIT_OPTIONS = [1_000, 5_000, 10_000, 50_000, 100_000] as const;
+
 export default function AnalyticsPage() {
   const { history, loading: historyLoading, isLive } = useMetricsHistory(7);
   const { metrics, loading: metricsLoading } = useRangerMetrics();
+  const [simulatedDeposit, setSimulatedDeposit] = useState<number>(10_000);
+
+  const statIcons = [TrendingUp, Activity, ArrowRightLeft, Layers];
 
   return (
     <div className="min-h-screen bg-background">
@@ -36,8 +43,11 @@ export default function AnalyticsPage() {
               </>
             ) : (
               <>
-                <span className="h-2 w-2 rounded-full bg-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">Demo data</span>
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/50 opacity-50" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                </span>
+                <span className="text-xs font-medium text-primary">Demo mode</span>
               </>
             )}
           </div>
@@ -45,19 +55,24 @@ export default function AnalyticsPage() {
 
         {/* Summary stats */}
         {!metricsLoading && metrics && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
             {[
-              { label: 'Current APY',   value: `${metrics.currentApyPct.toFixed(2)}%`,  sub: 'blended portfolio'       },
-              { label: 'Rate Spread',   value: `${metrics.spreadBps} bps`,              sub: 'best vs worst protocol'  },
-              { label: 'Rebalances',    value: String(metrics.rebalances24h),            sub: 'last 24 hours'           },
-              { label: 'Compounds',     value: String(metrics.compounds24h),             sub: 'last 24 hours'           },
-            ].map((stat) => (
-              <div key={stat.label} className="rounded-xl border border-border bg-card px-4 py-3">
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-                <p className="text-xl font-bold text-foreground mt-0.5 tabular-nums">{stat.value}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">{stat.sub}</p>
-              </div>
-            ))}
+              { label: 'Blended APY',   value: `${metrics.currentApyPct.toFixed(2)}%`,  accent: 'text-emerald-400' },
+              { label: 'Rate Spread',   value: `${metrics.spreadBps} bps`,              accent: metrics.spreadBps >= 50 ? 'text-emerald-400' : 'text-foreground' },
+              { label: 'Rebalances',    value: String(metrics.rebalances24h),            accent: 'text-foreground' },
+              { label: 'Compounds',     value: String(metrics.compounds24h),             accent: 'text-foreground' },
+            ].map((stat, i) => {
+              const Icon = statIcons[i];
+              return (
+                <div key={stat.label} className="rounded-xl border border-border bg-card px-4 py-3">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Icon className="h-3 w-3 text-muted-foreground" />
+                    <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{stat.label}</p>
+                  </div>
+                  <p className={`text-xl font-bold tabular-nums ${stat.accent}`}>{stat.value}</p>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -66,11 +81,31 @@ export default function AnalyticsPage() {
           <ApyTrendChart data={history} loading={historyLoading} />
         </div>
 
+        {/* Deposit size selector for cumulative chart */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs text-muted-foreground">Simulate deposit:</span>
+          <div className="flex gap-1.5">
+            {DEPOSIT_OPTIONS.map((amount) => (
+              <button
+                key={amount}
+                onClick={() => setSimulatedDeposit(amount)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+                  simulatedDeposit === amount
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {amount >= 1_000 ? `€${amount / 1_000}K` : `€${amount}`}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Bottom row: cumulative yield + earnings calculator */}
         <div className="grid lg:grid-cols-2 gap-6">
           <CumulativeYieldChart
             data={history}
-            depositEurc={10_000}
+            depositEurc={simulatedDeposit}
             loading={historyLoading}
           />
           <EarningsCalculator metrics={metrics} />

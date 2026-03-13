@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { PROTOCOL_META } from '@/lib/constants';
 import type { RangerRatesDoc, RangerMetrics, ProtocolId } from '@/lib/types';
 import { clsx } from 'clsx';
@@ -12,13 +13,6 @@ interface ApyBreakdownProps {
 }
 
 const PROTOCOLS: ProtocolId[] = ['drift', 'kamino', 'save'];
-
-// Mock allocations until vault goes live
-const MOCK_ALLOCATION: Record<ProtocolId, number> = {
-  drift: 50,
-  kamino: 30,
-  save: 15,
-};
 
 function StatusIcon({ utilization }: { utilization: number }) {
   if (utilization >= 0.85) {
@@ -42,6 +36,30 @@ function SkeletonRow() {
 export function ApyBreakdown({ rates, metrics, loading }: ApyBreakdownProps) {
   // Compute blended APY from metrics or rates
   const blendedApy = metrics?.currentApyPct ?? null;
+
+  // Derive allocation from rates — highest rate gets more
+  const allocation = useMemo<Record<ProtocolId, number>>(() => {
+    if (!rates) return { drift: 50, kamino: 30, save: 15 };
+    const total = rates.drift.apy + rates.kamino.apy + rates.save.apy;
+    if (total === 0) return { drift: 33, kamino: 33, save: 29 };
+    const raw = {
+      drift:  (rates.drift.apy / total) * 95,
+      kamino: (rates.kamino.apy / total) * 95,
+      save:   (rates.save.apy / total) * 95,
+    };
+    const clamped = {
+      drift:  Math.max(10, Math.min(70, raw.drift)),
+      kamino: Math.max(10, Math.min(70, raw.kamino)),
+      save:   Math.max(10, Math.min(70, raw.save)),
+    };
+    const sum = clamped.drift + clamped.kamino + clamped.save;
+    const scale = 95 / sum;
+    return {
+      drift:  Math.round(clamped.drift * scale),
+      kamino: Math.round(clamped.kamino * scale),
+      save:   Math.round(clamped.save * scale),
+    };
+  }, [rates]);
 
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -84,7 +102,7 @@ export function ApyBreakdown({ rates, metrics, loading }: ApyBreakdownProps) {
                 const meta = PROTOCOL_META[id];
                 const apyPct = rate ? (rate.apy * 100).toFixed(2) : '—';
                 const utilPct = rate ? (rate.utilization * 100).toFixed(1) : '—';
-                const allocationPct = MOCK_ALLOCATION[id];
+                const allocationPct = allocation[id];
                 const isBest = rates?.best === id;
 
                 return (
@@ -168,10 +186,10 @@ export function ApyBreakdown({ rates, metrics, loading }: ApyBreakdownProps) {
                 ) : rates ? (
                   (() => {
                     const weighted =
-                      (rates.drift.apy * MOCK_ALLOCATION.drift +
-                        rates.kamino.apy * MOCK_ALLOCATION.kamino +
-                        rates.save.apy * MOCK_ALLOCATION.save) /
-                      (MOCK_ALLOCATION.drift + MOCK_ALLOCATION.kamino + MOCK_ALLOCATION.save);
+                      (rates.drift.apy * allocation.drift +
+                        rates.kamino.apy * allocation.kamino +
+                        rates.save.apy * allocation.save) /
+                      (allocation.drift + allocation.kamino + allocation.save);
                     return `${(weighted * 100).toFixed(2)}%`;
                   })()
                 ) : (
