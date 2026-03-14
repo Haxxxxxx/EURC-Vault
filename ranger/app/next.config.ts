@@ -19,7 +19,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  output: 'export',
   reactStrictMode: true,
+  images: { unoptimized: true },
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
   },

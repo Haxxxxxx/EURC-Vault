@@ -48,3 +48,4 @@ database-debug.log
 
 # Package manager lockfiles (subdirectories)
 ranger/app/tsconfig.tsbuildinfo
+.firebase/

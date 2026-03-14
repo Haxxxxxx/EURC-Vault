@@ -3,19 +3,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { fetchRatesData } from '@/lib/fetchRates';
+import { computeMetrics } from '@/lib/computeMetrics';
 import type { RangerMetrics } from '@/lib/types';
 
 const POLL_INTERVAL_MS = 30_000;
-
-async function fetchMetricsFromApi(): Promise<RangerMetrics | null> {
-  try {
-    const res = await fetch('/api/metrics');
-    if (!res.ok) return null;
-    return (await res.json()) as RangerMetrics;
-  } catch {
-    return null;
-  }
-}
 
 export function useRangerMetrics() {
   const [metrics, setMetrics] = useState<RangerMetrics | null>(null);
@@ -36,18 +28,22 @@ export function useRangerMetrics() {
           setLoading(false);
         },
         () => {
-          fetchMetricsFromApi().then((data) => {
-            if (data) setMetrics(data);
+          // Firebase error — compute from live rates
+          fetchRatesData().then((rates) => {
+            setMetrics(computeMetrics(rates));
             setLoading(false);
-          });
+          }).catch(() => setLoading(false));
         },
       );
       return unsub;
     }
 
+    // No Firebase — compute from live protocol rates
     const poll = async () => {
-      const data = await fetchMetricsFromApi();
-      if (data) setMetrics(data);
+      try {
+        const rates = await fetchRatesData();
+        setMetrics(computeMetrics(rates));
+      } catch { /* silently retry next interval */ }
       setLoading(false);
     };
 

@@ -3,19 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { fetchRatesData } from '@/lib/fetchRates';
 import type { RangerRatesDoc } from '@/lib/types';
 
 const POLL_INTERVAL_MS = 30_000;
-
-async function fetchRatesFromApi(): Promise<RangerRatesDoc | null> {
-  try {
-    const res = await fetch('/api/rates');
-    if (!res.ok) return null;
-    return (await res.json()) as RangerRatesDoc;
-  } catch {
-    return null;
-  }
-}
 
 export function useRangerRates() {
   const [rates, setRates] = useState<RangerRatesDoc | null>(null);
@@ -26,7 +17,6 @@ export function useRangerRates() {
     const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
     if (projectId) {
-      // Firebase path — real-time Firestore listener
       const ref = doc(db, 'ranger_rates', 'latest');
       const unsub = onSnapshot(
         ref,
@@ -37,20 +27,22 @@ export function useRangerRates() {
           setLoading(false);
         },
         () => {
-          // Firebase error — fall back to API
-          fetchRatesFromApi().then((data) => {
-            if (data) setRates(data);
+          // Firebase error — fall back to direct protocol fetch
+          fetchRatesData().then((data) => {
+            setRates(data);
             setLoading(false);
-          });
+          }).catch(() => setLoading(false));
         },
       );
       return unsub;
     }
 
-    // No Firebase — poll API route for live protocol rates
+    // No Firebase — fetch directly from protocol APIs
     const poll = async () => {
-      const data = await fetchRatesFromApi();
-      if (data) setRates(data);
+      try {
+        const data = await fetchRatesData();
+        setRates(data);
+      } catch { /* silently retry next interval */ }
       setLoading(false);
     };
 
