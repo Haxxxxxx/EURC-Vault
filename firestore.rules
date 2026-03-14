@@ -75,6 +75,35 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ─── Ranger Earn collections (read-only for clients) ─────────────
+    // Written exclusively by Firebase Cloud Functions.
+    // Client reads are public (rate data is not sensitive).
+
+    match /ranger_rates/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /ranger_metrics/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /ranger_rebalances/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /ranger_activity/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /ranger_rates_history/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;

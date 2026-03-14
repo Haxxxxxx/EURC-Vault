@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { PROTOCOL_META } from '@/lib/constants';
+import { computeAllocation } from '@/lib/allocation';
 import type { RangerRatesDoc, RangerMetrics, ProtocolId } from '@/lib/types';
 import { clsx } from 'clsx';
 import { CheckCircle, AlertTriangle } from 'lucide-react';
@@ -37,29 +38,17 @@ export function ApyBreakdown({ rates, metrics, loading }: ApyBreakdownProps) {
   // Compute blended APY from metrics or rates
   const blendedApy = metrics?.currentApyPct ?? null;
 
-  // Derive allocation from rates — highest rate gets more
+  // Derive allocation from shared utility
+  const allocationEntries = useMemo(() => computeAllocation(rates), [rates]);
   const allocation = useMemo<Record<ProtocolId, number>>(() => {
-    if (!rates) return { drift: 50, kamino: 30, save: 15 };
-    const total = rates.drift.apy + rates.kamino.apy + rates.save.apy;
-    if (total === 0) return { drift: 33, kamino: 33, save: 29 };
-    const raw = {
-      drift:  (rates.drift.apy / total) * 95,
-      kamino: (rates.kamino.apy / total) * 95,
-      save:   (rates.save.apy / total) * 95,
-    };
-    const clamped = {
-      drift:  Math.max(10, Math.min(70, raw.drift)),
-      kamino: Math.max(10, Math.min(70, raw.kamino)),
-      save:   Math.max(10, Math.min(70, raw.save)),
-    };
-    const sum = clamped.drift + clamped.kamino + clamped.save;
-    const scale = 95 / sum;
-    return {
-      drift:  Math.round(clamped.drift * scale),
-      kamino: Math.round(clamped.kamino * scale),
-      save:   Math.round(clamped.save * scale),
-    };
-  }, [rates]);
+    const result = { drift: 0, kamino: 0, save: 0 } as Record<ProtocolId, number>;
+    for (const entry of allocationEntries) {
+      if (entry.id !== 'idle') {
+        result[entry.id as ProtocolId] = entry.pct;
+      }
+    }
+    return result;
+  }, [allocationEntries]);
 
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">

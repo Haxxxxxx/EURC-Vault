@@ -22,7 +22,7 @@ import {
   METRICS_SNAP_INTERVAL_MS,
 } from './config.js';
 
-import { fetchAllRates }        from './rates/aggregator.js';
+import { fetchAllRates, hasStaleRates } from './rates/aggregator.js';
 import { evaluateRebalance }    from './engine/rebalancer.js';
 import { executeRebalance, emergencyWithdrawAll } from './engine/executor.js';
 import { assessRisk }           from './engine/risk.js';
@@ -39,8 +39,7 @@ import type { AggregatedRates } from './rates/aggregator.js';
 
 const log = logger.child('bot');
 
-// ─── Mock vault state reader ──────────────────────────────────────────────────
-// TODO: Replace with real VoltrClient.getVaultState() when vault is deployed
+// ─── Vault state reader (mock when VAULT_ADDRESS not set) ─────────────────────
 
 function getMockVaultState(): VaultState {
   // Simulates a live vault for local development/testing
@@ -88,6 +87,19 @@ async function rebalanceTask(connection: Connection): Promise<void> {
 
   if (cb.isTripped()) {
     log.warn('Circuit breaker tripped — rebalancing suspended');
+    return;
+  }
+
+  // Never rebalance on stale or mock rate data
+  if (hasStaleRates(cachedRates)) {
+    log.warn('Stale rates detected — skipping rebalance to prevent misallocation');
+    return;
+  }
+
+  // Guard against any rate marked isStale (mock/fallback rates)
+  const staleProtocols = (['drift', 'kamino', 'save'] as const).filter((p) => cachedRates[p].isStale);
+  if (staleProtocols.length > 0) {
+    log.warn('Rate data includes stale/mock values — skipping rebalance', { stale: staleProtocols });
     return;
   }
 
@@ -145,19 +157,49 @@ async function compoundTask(connection: Connection): Promise<void> {
 
   try {
     const vaultState = await getVaultState(connection);
-    setLastRecordedTvl(vaultState.totalAssets);
+
+    // Only set the initial TVL baseline on first run (when _lastRecordedTvl is 0).
+    // After that, the compounder updates _lastRecordedTvl after each successful compound.
+    // Setting it every cycle would defeat accrual detection (currentTvl - baseline = 0).
+    const check = shouldCompound(vaultState.totalAssets);
+    if (!check.should && check.reason.includes('No baseline')) {
+      setLastRecordedTvl(vaultState.totalAssets);
+      log.info('Compound baseline TVL set', { tvl: (vaultState.totalAssets / 1_000_000).toFixed(2) });
+      return;
+    }
 
     const event = await runCompound(
       vaultState,
       cachedRates,
       async (harvestedAmount, fromProtocol, toProtocol) => {
-        // TODO: wire up real compound tx via executor
-        log.info('Compound tx (simulated)', {
+        if (!VAULT_ADDRESS) {
+          log.info('Compound tx (simulated — no vault address)', {
+            harvested: (harvestedAmount / 1_000_000).toFixed(4),
+            from: fromProtocol,
+            to:   toProtocol,
+          });
+          return `compound_sim_${Date.now()}`;
+        }
+
+        // Real compound: withdraw from source, deposit to highest-rate protocol
+        const compoundDecision = {
+          shouldRebalance:      true,
+          lowestRateProtocol:   fromProtocol,
+          highestRateProtocol:  toProtocol,
+          withdrawAmount:       harvestedAmount,
+          spreadBps:            0,
+          currentBlendedApyPct: 0,
+          targetBlendedApyPct:  0,
+          estimatedGainBps:     0,
+        };
+        const txSig = await executeRebalance(compoundDecision, vaultState, connection);
+        log.info('Compound tx executed', {
+          txSig,
           harvested: (harvestedAmount / 1_000_000).toFixed(4),
           from: fromProtocol,
           to:   toProtocol,
         });
-        return `compound_simulated_${Date.now()}`;
+        return txSig ?? `compound_failed_${Date.now()}`;
       },
     );
 
@@ -207,8 +249,24 @@ async function metricsSnapTask(connection: Connection): Promise<void> {
 
   try {
     const vaultState = await getVaultState(connection);
-    const _snapshot = generateSnapshot(vaultState, cachedRates, cb.isTripped());
-    // TODO: write snapshot to Firestore ranger_metrics collection
+    const snapshot = generateSnapshot(vaultState, cachedRates, cb.isTripped());
+
+    // Write to Firestore if configured
+    if (process.env.FIREBASE_PROJECT_ID) {
+      try {
+        const { getFirestore } = await import('firebase-admin/firestore');
+        const db = getFirestore();
+        await db.collection('ranger_metrics').doc('latest').set(snapshot);
+        await db.collection('ranger_metrics').add(snapshot);
+        log.debug('Metrics snapshot persisted to Firestore');
+      } catch (fsErr) {
+        log.warn('Firestore write failed — metrics snapshot not persisted', fsErr);
+      }
+    } else {
+      log.debug('Metrics snapshot generated (Firestore not configured)', {
+        blendedApy: `${snapshot.currentApyPct?.toFixed(2) ?? 0}%`,
+      });
+    }
   } catch (err) {
     log.error('Metrics snap task failed', err);
   }

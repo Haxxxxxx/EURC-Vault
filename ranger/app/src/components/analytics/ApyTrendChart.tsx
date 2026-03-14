@@ -8,6 +8,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  ReferenceLine,
   ResponsiveContainer,
 } from 'recharts';
 import type { MetricsPoint } from '@/hooks/useMetricsHistory';
@@ -72,6 +73,18 @@ export function ApyTrendChart({ data, loading }: ApyTrendChartProps) {
     );
   }
 
+  if (data.length === 0) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6">
+        <h2 className="text-base font-semibold text-foreground mb-2">7-Day APY Trend</h2>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <p className="text-sm text-muted-foreground">No historical data available yet</p>
+          <p className="text-xs text-muted-foreground mt-1">Data will appear once the bot starts logging metrics</p>
+        </div>
+      </div>
+    );
+  }
+
   const chartData = downsample(data, 200);
 
   return (
@@ -114,6 +127,20 @@ export function ApyTrendChart({ data, loading }: ApyTrendChartProps) {
             formatter={(value) => (
               <span style={{ color: '#94A3B8' }}>{value}</span>
             )}
+          />
+
+          {/* Holding EURC baseline (0% yield) */}
+          <ReferenceLine
+            y={0}
+            stroke="#475569"
+            strokeDasharray="6 4"
+            strokeWidth={1}
+            label={{
+              value: 'Holding EURC (0%)',
+              position: 'insideBottomRight',
+              fill: '#475569',
+              fontSize: 10,
+            }}
           />
 
           {/* Protocol lines */}

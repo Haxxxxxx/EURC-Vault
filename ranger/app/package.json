@@ -13,7 +13,7 @@
     "@solana/wallet-adapter-react": "^0.15.35",
     "@solana/wallet-adapter-react-ui": "^0.9.35",
     "@solana/web3.js": "^1.95.8",
-    "@voltr/vault-sdk": "^0.1.0",
+    "@voltr/vault-sdk": "^0.2.0",
     "clsx": "^2.1.1",
     "firebase": "^11.10.0",
     "lucide-react": "^0.468.0",

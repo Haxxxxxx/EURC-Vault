@@ -58,7 +58,7 @@ function mockKaminoRate(): ProtocolRate {
     utilization: 0.68,
     availableLiquidity: 800_000 * 1_000_000,
     fetchedAt: new Date(),
-    isStale: false,
+    isStale: true, // Mock rates must be flagged stale to prevent rebalancing on random data
   };
 }
 

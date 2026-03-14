@@ -35,6 +35,22 @@ export interface RangerMetrics {
   timestamp: number;
 }
 
+export type ActivityEventType = 'rebalance' | 'compound' | 'rate_alert' | 'health_check' | 'deposit' | 'withdraw';
+
+export interface ActivityEvent {
+  id: string;
+  type: ActivityEventType;
+  title: string;
+  description: string;
+  protocol?: ProtocolId;
+  /** EURC amount involved (UI amount, not atoms) */
+  amountEurc?: number;
+  /** APY improvement in bps */
+  gainBps?: number;
+  txSig?: string;
+  timestamp: number;
+}
+
 export interface RebalanceRecord {
   decision: 'REBALANCE' | 'SKIP';
   reason: string;

@@ -145,14 +145,35 @@ EURC is Circle's euro-denominated stablecoin on Solana. Key characteristics:
 
 ## Fee Structure
 
-| Fee Type | Rate | Purpose |
-|----------|------|---------|
-| Management fee | 0.5% annually | Bot infrastructure, Firebase, RPC costs |
-| Performance fee | 10% of profit | Incentivizes active management and continuous improvement |
+| Fee Type | Rate | Mechanism | Purpose |
+|----------|------|-----------|---------|
+| Management fee | 0.5% annually | Accrues continuously on TVL, deducted on-chain | Bot infrastructure, RPC, Firebase, monitoring |
+| Performance fee | 10% of profit | Applied on positive PnL above high-water mark | Incentivizes active management and optimization |
 
-Management fee is charged on TVL. Performance fee applies only to returns above 0% (high-water mark style — not charged on recovering from drawdowns).
+**Key properties:**
+- **No entry/exit fees** — deposit and withdraw freely (24h cooldown for large withdrawals)
+- **No hidden fees** — both fees are enforced on-chain by the Voltr vault contract
+- **High-water mark** — performance fee is never charged when recovering from drawdowns
+- **Admin fees** — 0 bps (admin authority receives no fees; all go to the manager)
 
-At 12% gross APY: net to depositor ≈ **10.7% APY** after fees.
+### Net APY Calculation
+
+Fees reduce the exchange rate growth. At different gross APY levels:
+
+| Gross APY | Mgmt Fee (-0.5%) | Perf Fee (-10% of profit) | Net to Depositor |
+|-----------|------------------|---------------------------|-----------------|
+| 1.0% | -0.5% | -0.05% | ~0.45% |
+| 5.0% | -0.5% | -0.45% | ~4.05% |
+| 12.0% | -0.5% | -1.15% | ~10.35% |
+
+### Current Market Context (March 2026)
+
+Protocol rates fluctuate with market activity. During low-activity periods, EURC lending rates can be sub-1% across all protocols. The strategy captures additional yield through:
+1. **Rate arbitrage** — routing to the highest-rate protocol (currently 60-70 bps spread)
+2. **Auto-compounding** — hourly reinvestment of accrued interest
+3. **Rate spike capture** — automatic rebalancing during demand events that spike rates
+
+The 12–15% APY target reflects active market conditions with elevated borrower demand.
 
 ---
 

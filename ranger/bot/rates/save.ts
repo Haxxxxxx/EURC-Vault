@@ -22,18 +22,13 @@ const log = logger.child('rates:save');
 const SAVE_API_BASE = 'https://api.save.finance';
 
 interface SaveReserveResponse {
-  reserves: Array<{
-    address: string;
-    liquidity: {
-      mintPubkey: string;
-      availableAmount: string;
-    };
-    rates: {
-      supplyInterestAPY: number;
-      borrowInterestAPY: number;
-    };
-    stats: {
-      utilizationRatio: number;
+  results: Array<{
+    rates?: { supplyInterest?: string };
+    reserve?: {
+      liquidity?: {
+        availableAmount?: string;
+        borrowedAmountWads?: string;
+      };
     };
   }>;
 }
@@ -48,13 +43,13 @@ function mockSaveRate(): ProtocolRate {
     utilization: 0.61,
     availableLiquidity: 1_200_000 * 1_000_000,
     fetchedAt: new Date(),
-    isStale: false,
+    isStale: true, // Mock rates must be flagged stale to prevent rebalancing on random data
   };
 }
 
 async function fetchFromSaveApi(reserveAddress: string): Promise<ProtocolRate | null> {
   try {
-    const url = `${SAVE_API_BASE}/v1/markets/configs`;
+    const url = `${SAVE_API_BASE}/v1/reserves?ids=${reserveAddress}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
 
     if (!res.ok) {
@@ -63,18 +58,28 @@ async function fetchFromSaveApi(reserveAddress: string): Promise<ProtocolRate | 
     }
 
     const data = (await res.json()) as SaveReserveResponse;
-    const reserve = data.reserves?.find(
-      (r) => r.address.toLowerCase() === reserveAddress.toLowerCase(),
-    );
+    const result = data.results?.[0];
 
-    if (!reserve) {
+    if (!result?.rates) {
       log.warn('EURC reserve not found in Save API response', { reserveAddress });
       return null;
     }
 
-    const apy = reserve.rates.supplyInterestAPY;
-    const utilization = reserve.stats.utilizationRatio;
-    const availableLiquidity = parseInt(reserve.liquidity.availableAmount, 10);
+    // supplyInterest is a percentage string (e.g., "0.23" = 0.23%)
+    const apyPct = parseFloat(result.rates.supplyInterest ?? '0');
+    const apy = apyPct / 100; // Convert to decimal
+
+    // Compute utilization from raw liquidity fields
+    let utilization = 0;
+    let availableLiquidity = 0;
+    const liq = result.reserve?.liquidity;
+    if (liq) {
+      const available = parseFloat(liq.availableAmount ?? '0') / 1e6;
+      const borrowed = parseFloat(liq.borrowedAmountWads ?? '0') / 1e18 / 1e6;
+      const total = available + borrowed;
+      if (total > 0) utilization = borrowed / total;
+      availableLiquidity = Math.round(available * 1e6); // back to atoms
+    }
 
     return {
       protocol: 'save',

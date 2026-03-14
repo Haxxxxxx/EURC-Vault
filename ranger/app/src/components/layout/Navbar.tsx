@@ -10,10 +10,13 @@ export function Navbar() {
   const pathname = usePathname();
 
   const navLinks = [
-    { label: 'Vault',      href: '/'          },
-    { label: 'Dashboard',  href: '/dashboard' },
-    { label: 'Analytics',  href: '/analytics' },
-    { label: 'Deposit',    href: '/deposit'   },
+    { label: 'Vault',      href: '/'           },
+    { label: 'Dashboard',  href: '/dashboard'  },
+    { label: 'Analytics',  href: '/analytics'  },
+    { label: 'Simulator',  href: '/simulator'  },
+    { label: 'Activity',   href: '/activity'   },
+    { label: 'Docs',       href: '/docs'       },
+    { label: 'Deposit',    href: '/deposit'    },
   ];
 
   return (
@@ -32,7 +35,7 @@ export function Navbar() {
           </Link>
 
           {/* Center: Nav links */}
-          <div className="hidden sm:flex items-center gap-1 rounded-lg bg-secondary/50 p-1">
+          <div className="hidden md:flex items-center gap-0.5 rounded-lg bg-secondary/50 p-1">
             {navLinks.map(({ label, href }) => {
               const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
               return (
@@ -40,7 +43,7 @@ export function Navbar() {
                   key={href}
                   href={href}
                   className={clsx(
-                    'rounded-md px-4 py-1.5 text-sm font-medium transition-all',
+                    'rounded-md px-3 lg:px-4 py-1.5 text-xs lg:text-sm font-medium transition-all whitespace-nowrap',
                     isActive
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
@@ -69,8 +72,8 @@ export function Navbar() {
           </div>
         </div>
 
-        {/* Mobile nav links */}
-        <div className="flex sm:hidden items-center gap-1 pb-3">
+        {/* Mobile nav links — horizontally scrollable */}
+        <div className="flex md:hidden items-center gap-1 pb-3 overflow-x-auto scrollbar-hide -mx-4 px-4">
           {navLinks.map(({ label, href }) => {
             const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
@@ -78,7 +81,7 @@ export function Navbar() {
                 key={href}
                 href={href}
                 className={clsx(
-                  'rounded-md px-3 py-1.5 text-sm font-medium transition-all',
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition-all whitespace-nowrap shrink-0',
                   isActive
                     ? 'bg-secondary text-foreground'
                     : 'text-muted-foreground hover:text-foreground',

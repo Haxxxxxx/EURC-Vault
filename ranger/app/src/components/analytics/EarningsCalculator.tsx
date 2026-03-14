@@ -30,7 +30,7 @@ export function EarningsCalculator({ metrics }: EarningsCalculatorProps) {
     return isNaN(val) || val <= 0 ? 0 : val;
   }, [depositInput]);
 
-  const apyPct = metrics?.currentApyPct ?? 9.4;
+  const apyPct = metrics?.currentApyPct ?? 0;
   const apyDecimal = apyPct / 100;
   const period = PERIODS[selectedPeriodIdx];
 
@@ -138,9 +138,9 @@ export function EarningsCalculator({ metrics }: EarningsCalculatorProps) {
           <div className="space-y-1">
             {(
               [
-                ['drift',  metrics?.driftApyPct  ?? 8.2,  '50%'],
-                ['kamino', metrics?.kaminoApyPct ?? 7.4,  '30%'],
-                ['save',   metrics?.saveApyPct   ?? 6.8,  '15%'],
+                ['drift',  metrics?.driftApyPct  ?? 0,  '50%'],
+                ['kamino', metrics?.kaminoApyPct ?? 0,  '30%'],
+                ['save',   metrics?.saveApyPct   ?? 0,  '15%'],
               ] as [keyof typeof PROTOCOL_META, number, string][]
             ).map(([proto, apy, alloc]) => (
               <div key={proto} className="flex items-center justify-between text-[11px]">

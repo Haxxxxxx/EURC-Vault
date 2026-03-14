@@ -3,6 +3,7 @@
 import { ExternalLink, ArrowRightLeft, SkipForward, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { RebalanceRecord } from '@/lib/types';
+import { explorerTxUrl } from '@/lib/constants';
 import { PROTOCOL_META } from '@/lib/constants';
 
 interface RebalanceHistoryProps {
@@ -69,10 +70,10 @@ export function RebalanceHistory({ history, loading }: RebalanceHistoryProps) {
             </p>
           </div>
         ) : (
-          displayed.map((record, idx) => {
+          displayed.map((record) => {
             const isRebalance = record.decision === 'REBALANCE';
             return (
-              <div key={idx} className="flex items-start gap-3 p-4 hover:bg-secondary/20 transition-colors">
+              <div key={record.timestamp} className="flex items-start gap-3 p-4 hover:bg-secondary/20 transition-colors">
                 {/* Icon */}
                 <div
                   className={clsx(
@@ -142,7 +143,7 @@ export function RebalanceHistory({ history, loading }: RebalanceHistoryProps) {
                     )}
                     {record.txSig && (
                       <a
-                        href={`https://explorer.solana.com/tx/${record.txSig}`}
+                        href={explorerTxUrl(record.txSig!)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-1 text-xs text-primary hover:text-primary-hover transition-colors"

@@ -99,6 +99,14 @@ export const RATE_STALENESS_MS = 10 * 60 * 1_000; // 10 min
 /** Reject rate if it deviates > 50% from 7-day MA (oracle sanity check) */
 export const RATE_ORACLE_DEVIATION_LIMIT = 0.50;
 
+// ─── Transaction Parameters ─────────────────────────────────────────────────
+
+/** Compute unit limit for vault strategy transactions */
+export const COMPUTE_UNIT_LIMIT = parseInt(process.env.COMPUTE_UNIT_LIMIT ?? '400000', 10);
+
+/** Priority fee in microLamports */
+export const PRIORITY_FEE_MICRO_LAMPORTS = parseInt(process.env.PRIORITY_FEE_MICRO_LAMPORTS ?? '5000', 10);
+
 // ─── Bot Intervals ───────────────────────────────────────────────────────────
 
 export const RATE_FETCH_INTERVAL_MS     = 5  * 60 * 1_000; // 5 min
@@ -111,7 +119,7 @@ export const METRICS_SNAP_INTERVAL_MS  = 15 * 60 * 1_000;  // 15 min
 
 /** Drift spot market index for EURC/USDC (mainnet) */
 export const DRIFT_SPOT_MARKET_INDEX = parseInt(
-  process.env.DRIFT_SPOT_MARKET_INDEX ?? '15',
+  process.env.DRIFT_SPOT_MARKET_INDEX ?? '54',
   10,
 );
 
@@ -120,11 +128,11 @@ export const DRIFT_ORACLE_ADDRESS = process.env.DRIFT_ORACLE_ADDRESS ?? '';
 
 /** Kamino EURC reserve address (mainnet) */
 export const KAMINO_RESERVE_ADDRESS =
-  process.env.KAMINO_RESERVE_ADDRESS ?? '';
+  process.env.KAMINO_RESERVE_ADDRESS ?? 'EGPE45iPkme8G8C1xFDNZoZeHdP3aRYtaAfAQuuwrcGZ';
 
 /** Save (Solend) EURC reserve address (mainnet) */
 export const SAVE_RESERVE_ADDRESS =
-  process.env.SAVE_RESERVE_ADDRESS ?? '';
+  process.env.SAVE_RESERVE_ADDRESS ?? 'ECNduHkbaQL5mgNenGCwYhXtdv4tqVjeRcCYwUeQQHc1';
 
 /** Save (Solend) EURC lending market (default: Solend main market) */
 export const SAVE_LENDING_MARKET =

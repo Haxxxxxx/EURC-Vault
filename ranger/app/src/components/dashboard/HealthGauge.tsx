@@ -3,6 +3,7 @@
 import { AlertTriangle, Activity, RefreshCw, Layers } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { RangerMetrics } from '@/lib/types';
+import { timeAgo } from '@/lib/format';
 
 interface HealthGaugeProps {
   metrics: RangerMetrics | null;
@@ -21,44 +22,34 @@ function getHealthLabel(score: number): string {
   return 'Critical';
 }
 
-function timeAgo(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  return `${Math.floor(minutes / 60)}h ago`;
+
+// SVG arc gauge helpers (extracted to module scope to avoid re-creation)
+const ARC_RADIUS = 56;
+const ARC_CX = 70;
+const ARC_CY = 70;
+const ARC_START = -210;
+const ARC_TOTAL = 240;
+
+function polarToCartesian(angle: number) {
+  const rad = ((angle - 90) * Math.PI) / 180;
+  return { x: ARC_CX + ARC_RADIUS * Math.cos(rad), y: ARC_CY + ARC_RADIUS * Math.sin(rad) };
 }
 
-// SVG arc gauge
+function describeArc(start: number, end: number) {
+  const s = polarToCartesian(start);
+  const e = polarToCartesian(end);
+  const large = end - start > 180 ? 1 : 0;
+  return `M ${s.x} ${s.y} A ${ARC_RADIUS} ${ARC_RADIUS} 0 ${large} 1 ${e.x} ${e.y}`;
+}
+
 function ArcGauge({ score, stroke }: { score: number; stroke: string }) {
-  const radius = 56;
-  const cx = 70;
-  const cy = 70;
-  const startAngle = -210;
-  const totalAngle = 240;
-
-  function polarToCartesian(angle: number) {
-    const rad = ((angle - 90) * Math.PI) / 180;
-    return {
-      x: cx + radius * Math.cos(rad),
-      y: cy + radius * Math.sin(rad),
-    };
-  }
-
-  function describeArc(start: number, end: number) {
-    const s = polarToCartesian(start);
-    const e = polarToCartesian(end);
-    const large = end - start > 180 ? 1 : 0;
-    return `M ${s.x} ${s.y} A ${radius} ${radius} 0 ${large} 1 ${e.x} ${e.y}`;
-  }
-
-  const endAngle = startAngle + (score / 100) * totalAngle;
+  const endAngle = ARC_START + (score / 100) * ARC_TOTAL;
 
   return (
-    <svg width="140" height="100" viewBox="0 0 140 100" className="overflow-visible">
+    <svg width="140" height="100" viewBox="0 0 140 100" className="overflow-visible" role="img" aria-label={`Health score: ${score} out of 100`}>
       {/* Track */}
       <path
-        d={describeArc(startAngle, startAngle + totalAngle)}
+        d={describeArc(ARC_START, ARC_START + ARC_TOTAL)}
         fill="none"
         stroke="var(--secondary)"
         strokeWidth="10"
@@ -66,7 +57,7 @@ function ArcGauge({ score, stroke }: { score: number; stroke: string }) {
       />
       {/* Fill */}
       <path
-        d={describeArc(startAngle, endAngle)}
+        d={describeArc(ARC_START, endAngle)}
         fill="none"
         stroke={stroke}
         strokeWidth="10"

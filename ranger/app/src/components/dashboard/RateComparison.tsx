@@ -2,6 +2,7 @@
 
 import { PROTOCOL_META } from '@/lib/constants';
 import type { RangerRatesDoc, ProtocolId } from '@/lib/types';
+import { ProtocolIcon } from '@/components/ui/ProtocolIcon';
 import { clsx } from 'clsx';
 
 interface RateComparisonProps {
@@ -47,7 +48,11 @@ export function RateComparison({ rates, loading }: RateComparisonProps) {
             </span>
           )}
         </div>
-        <span className="text-xs text-muted-foreground">Refreshes every 30s</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {rates?.fetchedAt
+            ? `Updated ${new Date(rates.fetchedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+            : 'Refreshes every 30s'}
+        </span>
       </div>
 
       {loading ? (
@@ -74,10 +79,7 @@ export function RateComparison({ rates, loading }: RateComparisonProps) {
               >
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex items-center gap-2">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: meta.color }}
-                    />
+                    <ProtocolIcon protocol={id} size={14} />
                     <span className="text-sm font-medium text-foreground">{meta.label}</span>
                     {isBest && (
                       <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400 uppercase tracking-wide">

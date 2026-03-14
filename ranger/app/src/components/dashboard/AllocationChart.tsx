@@ -1,41 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { PROTOCOL_META } from '@/lib/constants';
+import { computeAllocation } from '@/lib/allocation';
 import { useRangerMetrics } from '@/hooks/useRangerMetrics';
-import { useRangerRates } from '@/hooks/useRangerRates';
-
-/** Derive allocation from live rates — highest rate gets 60-65%, others proportional, 5% idle */
-function deriveAllocation(rates: { drift: number; kamino: number; save: number }) {
-  const total = rates.drift + rates.kamino + rates.save;
-  if (total === 0) return [50, 30, 15, 5];
-
-  // Rate-weighted allocation with caps
-  const raw = {
-    drift:  (rates.drift / total) * 95,
-    kamino: (rates.kamino / total) * 95,
-    save:   (rates.save / total) * 95,
-  };
-
-  // Clamp to [10, 70] range
-  const clamped = {
-    drift:  Math.max(10, Math.min(70, raw.drift)),
-    kamino: Math.max(10, Math.min(70, raw.kamino)),
-    save:   Math.max(10, Math.min(70, raw.save)),
-  };
-
-  // Normalize so clamped + idle = 100
-  const sum = clamped.drift + clamped.kamino + clamped.save;
-  const scale = 95 / sum;
-
-  return [
-    Math.round(clamped.drift * scale),
-    Math.round(clamped.kamino * scale),
-    Math.round(clamped.save * scale),
-    5, // idle reserve
-  ];
-}
+import { ProtocolIcon } from '@/components/ui/ProtocolIcon';
+import type { ProtocolId, RangerRatesDoc } from '@/lib/types';
 
 function formatTvl(tvl: number): string {
   if (tvl >= 1_000_000) return `€${(tvl / 1_000_000).toFixed(2)}M`;
@@ -66,27 +36,27 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
   );
 }
 
-export function AllocationChart() {
+interface AllocationChartProps {
+  rates: RangerRatesDoc | null;
+}
+
+export function AllocationChart({ rates }: AllocationChartProps) {
   const { metrics } = useRangerMetrics();
-  const { rates } = useRangerRates();
   const tvl = metrics?.tvlEurc ?? 100_000;
 
-  // Derive allocation from current rates (updates when rates jitter)
-  const allocation = useMemo(() => {
-    if (!rates) return [50, 30, 15, 5];
-    return deriveAllocation({
-      drift: rates.drift.apy,
-      kamino: rates.kamino.apy,
-      save: rates.save.apy,
-    });
-  }, [rates]);
+  const allocation = useMemo(() => computeAllocation(rates), [rates]);
 
-  const chartData = useMemo(() => [
-    { id: 'drift',  name: 'Drift',  value: allocation[0], color: PROTOCOL_META.drift.color,  eurcValue: formatTvl(tvl * allocation[0] / 100) },
-    { id: 'kamino', name: 'Kamino', value: allocation[1], color: PROTOCOL_META.kamino.color, eurcValue: formatTvl(tvl * allocation[1] / 100) },
-    { id: 'save',   name: 'Save',   value: allocation[2], color: PROTOCOL_META.save.color,   eurcValue: formatTvl(tvl * allocation[2] / 100) },
-    { id: 'idle',   name: 'Idle',   value: allocation[3], color: PROTOCOL_META.idle.color,   eurcValue: formatTvl(tvl * allocation[3] / 100) },
-  ], [allocation, tvl]);
+  const chartData = useMemo(
+    () =>
+      allocation.map((entry) => ({
+        id: entry.id,
+        name: entry.label,
+        value: entry.pct,
+        color: entry.color,
+        eurcValue: formatTvl((tvl * entry.pct) / 100),
+      })),
+    [allocation, tvl],
+  );
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
@@ -131,10 +101,14 @@ export function AllocationChart() {
       <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2">
         {chartData.map((entry) => (
           <div key={entry.id} className="flex items-center gap-2">
-            <span
-              className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
-              style={{ backgroundColor: entry.color }}
-            />
+            {entry.id === 'idle' ? (
+              <span
+                className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
+                style={{ backgroundColor: entry.color }}
+              />
+            ) : (
+              <ProtocolIcon protocol={entry.id as ProtocolId} size={14} />
+            )}
             <span className="text-xs text-muted-foreground">{entry.name}</span>
             <span className="ml-auto text-xs font-medium text-foreground tabular-nums">{entry.value}%</span>
           </div>

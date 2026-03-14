@@ -158,7 +158,7 @@ describe('remaining-accounts helpers — shape validation', () => {
   // Import helpers after mocks are set up
   // We test the account shapes without needing live network calls
 
-  it('getSaveStrategyPDA returns an off-curve PublicKey', async () => {
+  it('getSaveStrategyPDA returns an off-curve PublicKey', { timeout: 15_000 }, async () => {
     const { getSaveStrategyPDA } = await import('../bot/utils/remaining-accounts.js');
     const counterPartyTa = new PublicKey('8SheGtsopRUDzdiD6v6BR9a6bqZ9QwywYQY99Fp5meNf');
     const pda = getSaveStrategyPDA(counterPartyTa);

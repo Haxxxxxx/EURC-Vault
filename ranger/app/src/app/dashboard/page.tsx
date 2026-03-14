@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { RateComparison } from '@/components/dashboard/RateComparison';
 import { ApyBreakdown } from '@/components/dashboard/ApyBreakdown';
 import { AllocationChart } from '@/components/dashboard/AllocationChart';
@@ -13,11 +14,10 @@ import { useRangerMetrics } from '@/hooks/useRangerMetrics';
 import { useRebalanceHistory } from '@/hooks/useRebalanceHistory';
 
 export default function DashboardPage() {
-  const { rates, loading: ratesLoading, isLive: ratesLive } = useRangerRates();
-  const { metrics, loading: metricsLoading, isLive: metricsLive } = useRangerMetrics();
+  usePageTitle('Dashboard');
+  const { rates, loading: ratesLoading } = useRangerRates();
+  const { metrics, loading: metricsLoading } = useRangerMetrics();
   const { history, loading: historyLoading } = useRebalanceHistory(20);
-
-  const isFullyLive = ratesLive && metricsLive;
 
   return (
     <div className="min-h-screen bg-background">
@@ -34,27 +34,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Live / Mock data indicator */}
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
-              {isFullyLive ? (
-                <>
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                  </span>
-                  <span className="text-xs font-medium text-emerald-400">Live data</span>
-                </>
-              ) : (
-                <>
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/50 opacity-50" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                  </span>
-                  <span className="text-xs font-medium text-primary">Demo mode</span>
-                </>
-              )}
-            </div>
-
             <Link
               href="/deposit"
               className="hidden sm:inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary-hover transition-colors"
@@ -66,7 +45,16 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick stats row */}
-        {!metricsLoading && metrics && (
+        {metricsLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="rounded-xl border border-border bg-card px-4 py-3">
+                <div className="h-3 w-16 rounded bg-secondary animate-pulse mb-2" />
+                <div className="h-6 w-24 rounded bg-secondary animate-pulse" />
+              </div>
+            ))}
+          </div>
+        ) : metrics && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
             {[
               { label: 'Blended APY',  value: `${metrics.currentApyPct.toFixed(2)}%`,  accent: 'text-emerald-400' },
@@ -93,7 +81,7 @@ export default function DashboardPage() {
           {/* Right column (1/3 width) */}
           <div className="space-y-6">
             <HealthGauge metrics={metrics} loading={metricsLoading} />
-            <AllocationChart />
+            <AllocationChart rates={rates} />
           </div>
         </div>
 

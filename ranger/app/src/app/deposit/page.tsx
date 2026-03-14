@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import Link from 'next/link';
@@ -21,10 +21,15 @@ import {
 } from '@solana/web3.js';
 import BN from 'bn.js';
 import { VoltrClient } from '@voltr/vault-sdk';
-import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { Navbar } from '@/components/layout/Navbar';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { useRangerMetrics } from '@/hooks/useRangerMetrics';
-import { VAULT_ADDRESS, EURC_MINT, EURC_PRECISION } from '@/lib/constants';
+import { useVaultState } from '@/hooks/useVaultState';
+import { useToast } from '@/components/ui/Toast';
+import { VAULT_ADDRESS, EURC_MINT, EURC_PRECISION, MGMT_FEE_BPS, PERF_FEE_BPS, explorerTxUrl } from '@/lib/constants';
+import { parseUserError } from '@/lib/errors';
+import { formatTvl } from '@/lib/format';
 import { clsx } from 'clsx';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -37,19 +42,8 @@ type TxState =
   | { status: 'success'; txSig: string; amount: number; tab: Tab }
   | { status: 'error'; message: string };
 
-// ─── Demo / mock vault state ─────────────────────────────────────────────────
-// These values represent the vault after ~4 months of operation at ~9.4% APY.
-// Replace with on-chain reads once VAULT_ADDRESS is configured.
-
-/** pbEURC shares per EURC deposited at current exchange rate */
-const DEMO_EXCHANGE_RATE = 1.0312; // 1 EURC → 0.9697 pbEURC (rate has grown from 1.0)
-
-/** Mock user balances — replace with real token account reads */
-const DEMO_EURC_BALANCE  = 500.0;         // EURC available to deposit
-const DEMO_SHARES        = 1_950.5;       // pbEURC shares currently held
-const DEMO_TVL           = 847_200;       // vault TVL in EURC
-const DEMO_MGMT_FEE_BPS  = 50;           // 0.5% annual
-const DEMO_PERF_FEE_BPS  = 1_000;        // 10% on profit
+/** Debounce delay for LP preview RPC calls (ms) */
+const LP_PREVIEW_DEBOUNCE_MS = 400;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -167,76 +161,30 @@ function OutputPreview({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function DepositPage() {
+  usePageTitle('Deposit');
   const { connected, publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
   const { metrics, loading: metricsLoading } = useRangerMetrics();
+  const vault = useVaultState();
+  const { toast } = useToast();
 
   const [tab, setTab]       = useState<Tab>('deposit');
   const [amount, setAmount] = useState('');
   const [txState, setTxState] = useState<TxState>({ status: 'idle' });
-
-  // On-chain balances (live when vault is deployed + wallet connected)
-  const [eurcBalance,  setEurcBalance]  = useState<number>(DEMO_EURC_BALANCE);
-  const [userShares,   setUserShares]   = useState<number>(DEMO_SHARES);
-  const [exchangeRate, setExchangeRate] = useState<number>(DEMO_EXCHANGE_RATE);
   const [lpPreviewShares, setLpPreviewShares] = useState<number | null>(null);
 
   const isVaultLive = Boolean(VAULT_ADDRESS);
+  const { eurcBalance, userShares, exchangeRate, tvl } = vault;
 
-  // Fetch on-chain balances when wallet connects + vault is live
-  useEffect(() => {
-    if (!connected || !publicKey || !isVaultLive) return;
-
-    const fetchBalances = async () => {
-      try {
-        const client      = new VoltrClient(connection);
-        const vaultPubkey = new PublicKey(VAULT_ADDRESS);
-
-        // EURC balance
-        const { vaultLpMint } = client.findVaultAddresses(vaultPubkey);
-        const eurcAta = PublicKey.findProgramAddressSync(
-          [publicKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), EURC_MINT.toBuffer()],
-          ASSOCIATED_TOKEN_PROGRAM_ID,
-        )[0];
-        const lpAta = PublicKey.findProgramAddressSync(
-          [publicKey.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), vaultLpMint.toBuffer()],
-          ASSOCIATED_TOKEN_PROGRAM_ID,
-        )[0];
-
-        const [eurcInfo, lpInfo] = await Promise.all([
-          connection.getTokenAccountBalance(eurcAta).catch(() => null),
-          connection.getTokenAccountBalance(lpAta).catch(() => null),
-        ]);
-
-        if (eurcInfo) setEurcBalance(parseFloat(eurcInfo.value.uiAmountString ?? '0'));
-        if (lpInfo)   setUserShares(parseFloat(lpInfo.value.uiAmountString ?? '0'));
-
-        // Exchange rate from vault TVL / LP supply
-        const positionData = await client.getPositionAndTotalValuesForVault(vaultPubkey).catch(() => null);
-        if (positionData?.totalValue) {
-          const lpMintInfo = await connection.getTokenSupply(vaultLpMint).catch(() => null);
-          if (lpMintInfo && parseFloat(lpMintInfo.value.uiAmountString ?? '0') > 0) {
-            const rate = parseFloat(positionData.totalValue.toString()) /
-              EURC_PRECISION /
-              parseFloat(lpMintInfo.value.uiAmountString!);
-            setExchangeRate(rate > 0 ? rate : DEMO_EXCHANGE_RATE);
-          }
-        }
-      } catch {
-        // Silently fall back to demo values on RPC error
-      }
-    };
-
-    void fetchBalances();
-  }, [connected, publicKey, isVaultLive, connection]);
-
-  // Recalculate LP preview when amount changes
+  // Debounced LP preview — avoids hammering RPC on every keystroke
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
     if (!isVaultLive || tab !== 'deposit') { setLpPreviewShares(null); return; }
     const parsed = parseFloat(amount);
     if (!parsed || parsed <= 0) { setLpPreviewShares(null); return; }
 
-    const fetchPreview = async () => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
       try {
         const client = new VoltrClient(connection);
         const atoms  = new BN(Math.floor(parsed * EURC_PRECISION));
@@ -246,9 +194,9 @@ export default function DepositPage() {
         // Fall back to exchange-rate math
         setLpPreviewShares(parsed / exchangeRate);
       }
-    };
+    }, LP_PREVIEW_DEBOUNCE_MS);
 
-    void fetchPreview();
+    return () => clearTimeout(debounceRef.current);
   }, [amount, tab, isVaultLive, connection, exchangeRate]);
 
   // Reset form when switching tabs
@@ -258,8 +206,8 @@ export default function DepositPage() {
     setLpPreviewShares(null);
   }, [tab]);
 
-  const currentApy       = metrics?.currentApyPct ?? 9.4;
-  const tvl              = metrics?.tvlEurc        ?? DEMO_TVL;
+  const currentApy       = metrics?.currentApyPct ?? 0;
+  const displayTvl       = metrics?.tvlEurc ?? tvl;
   const userSharesInEurc = userShares * exchangeRate;
 
   const parsedAmount = parseFloat(amount) || 0;
@@ -279,7 +227,7 @@ export default function DepositPage() {
       ? parsedAmount <= eurcBalance
       : parsedAmount <= userSharesInEurc);
 
-  const canSubmit = connected && isAmountValid && txState.status !== 'pending';
+  const canSubmit = connected && isVaultLive && isAmountValid && txState.status !== 'pending';
 
   const handleAction = useCallback(async () => {
     if (!canSubmit || !publicKey) return;
@@ -288,14 +236,10 @@ export default function DepositPage() {
 
     try {
       if (!isVaultLive) {
-        // Demo mode — simulate a delay and show success
-        await new Promise<void>((resolve) => setTimeout(resolve, 1_500));
-        setTxState({ status: 'success', txSig: 'demo_tx_stub', amount: parsedAmount, tab });
-        setAmount('');
+        setTxState({ status: 'error', message: 'Vault is not deployed yet. Set NEXT_PUBLIC_VAULT_ADDRESS to enable transactions.' });
         return;
       }
 
-      // Live mode — real VoltrClient transactions
       const client      = new VoltrClient(connection);
       const vaultPubkey = new PublicKey(VAULT_ADDRESS);
 
@@ -333,19 +277,20 @@ export default function DepositPage() {
       setTxState({ status: 'success', txSig, amount: parsedAmount, tab });
       setAmount('');
       setLpPreviewShares(null);
+      vault.refetch();
+      toast(
+        tab === 'deposit'
+          ? `Deposited ${parsedAmount.toLocaleString()} EURC successfully`
+          : `Withdrew ${parsedAmount.toLocaleString()} EURC successfully`,
+        { type: 'success', title: tab === 'deposit' ? 'Deposit Confirmed' : 'Withdrawal Confirmed' },
+      );
     } catch (err) {
-      setTxState({
-        status: 'error',
-        message: err instanceof Error ? err.message : 'Transaction failed',
-      });
+      const message = parseUserError(err);
+      setTxState({ status: 'error', message });
+      toast(message, { type: 'error', title: 'Transaction Failed' });
     }
   }, [canSubmit, publicKey, parsedAmount, tab, isVaultLive, connection, sendTransaction, withdrawPreview]);
 
-  function formatTvl(v: number) {
-    if (v >= 1_000_000) return `€${(v / 1_000_000).toFixed(2)}M`;
-    if (v >= 1_000)     return `€${(v / 1_000).toFixed(1)}K`;
-    return `€${v.toFixed(0)}`;
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -362,16 +307,30 @@ export default function DepositPage() {
           Back to Vault
         </Link>
 
-        {/* Demo-mode banner */}
+        {/* Vault not deployed warning */}
         {!isVaultLive && (
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
             <AlertTriangle className="h-4 w-4 text-yellow-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-yellow-300">Demo Mode</p>
+              <p className="text-sm font-medium text-yellow-300">Vault Not Deployed</p>
               <p className="mt-0.5 text-xs text-yellow-400/80">
-                The vault is not yet deployed. Transactions are simulated for demonstration.
-                Set <code className="font-mono">NEXT_PUBLIC_VAULT_ADDRESS</code> to enable live mode.
+                The vault contract is not yet deployed on-chain. Deposits and withdrawals are disabled until deployment.
+                You can still explore the{' '}
+                <Link href="/dashboard" className="underline hover:text-yellow-300 transition-colors">dashboard</Link>,{' '}
+                <Link href="/simulator" className="underline hover:text-yellow-300 transition-colors">simulator</Link>,{' '}
+                and <Link href="/docs" className="underline hover:text-yellow-300 transition-colors">documentation</Link>.
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Vault data error */}
+        {vault.error && (
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+            <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-red-300">Failed to load vault data</p>
+              <p className="mt-0.5 text-xs text-red-400/80">{vault.error}</p>
             </div>
           </div>
         )}
@@ -410,13 +369,13 @@ export default function DepositPage() {
               <div className="h-8 w-px bg-border" />
               <StatPill
                 label="TVL"
-                value={formatTvl(tvl)}
+                value={formatTvl(displayTvl)}
                 loading={metricsLoading}
               />
               <div className="h-8 w-px bg-border" />
               <StatPill
                 label="Exchange Rate"
-                value={`1 : ${exchangeRate.toFixed(4)}`}
+                value={exchangeRate > 0 ? `1 : ${exchangeRate.toFixed(4)}` : '—'}
               />
             </div>
 
@@ -463,7 +422,7 @@ export default function DepositPage() {
               <OutputPreview
                 amount={depositPreview}
                 tokenLabel="pbEURC"
-                subtext={`Yield-bearing vault shares at 1 EURC = ${(1 / exchangeRate).toFixed(4)} pbEURC`}
+                subtext={exchangeRate > 0 ? `Yield-bearing vault shares at 1 EURC = ${(1 / exchangeRate).toFixed(4)} pbEURC` : 'Exchange rate loading...'}
                 tooltip="pbEURC are yield-bearing receipt tokens. As the vault earns yield through rate arbitrage and compounding, the exchange rate grows — meaning your pbEURC shares are worth more EURC over time. No manual claiming needed."
               />
             ) : (
@@ -485,9 +444,9 @@ export default function DepositPage() {
                       ? `Deposited ${txState.amount.toLocaleString()} EURC`
                       : `Withdrew ${txState.amount.toLocaleString()} EURC`}
                   </p>
-                  {txState.txSig !== 'demo_tx_stub' && (
+                  {txState.txSig && (
                     <a
-                      href={`https://solscan.io/tx/${txState.txSig}`}
+                      href={explorerTxUrl(txState.txSig)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-1 inline-flex items-center gap-1 text-xs text-emerald-400/80 hover:text-emerald-300 transition-colors"
@@ -542,7 +501,7 @@ export default function DepositPage() {
                     {tab === 'deposit' ? 'Depositing…' : 'Withdrawing…'}
                   </span>
                 ) : !isVaultLive ? (
-                  'Try Demo Deposit'
+                  'Vault Not Deployed'
                 ) : !isAmountValid && parsedAmount > 0 ? (
                   'Insufficient Balance'
                 ) : tab === 'deposit' ? (
@@ -554,13 +513,20 @@ export default function DepositPage() {
             )}
 
             {/* Fee disclosure */}
-            <div className="flex items-start gap-2 pt-1">
-              <Info className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0 mt-0.5" />
-              <p className="text-xs text-muted-foreground/70 leading-relaxed">
-                {DEMO_MGMT_FEE_BPS / 100}% annual management fee ·{' '}
-                {DEMO_PERF_FEE_BPS / 100}% performance fee on profits (high-water mark) ·
-                Yield is accrued via the pbEURC exchange rate — no manual claiming required.
-              </p>
+            <div className="rounded-xl border border-border bg-secondary/10 p-3.5">
+              <div className="flex items-start gap-2">
+                <Info className="h-3.5 w-3.5 text-muted-foreground/60 shrink-0 mt-0.5" />
+                <div className="space-y-1.5">
+                  <p className="text-xs text-muted-foreground/80 leading-relaxed">
+                    <span className="text-foreground/70 font-medium">{MGMT_FEE_BPS / 100}% management</span> (annual, on TVL) ·{' '}
+                    <span className="text-foreground/70 font-medium">{PERF_FEE_BPS / 100}% performance</span> (on profits, high-water mark)
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
+                    No hidden fees. No lock-up penalties. Yield accrues via the pbEURC exchange rate — no manual claiming required.{' '}
+                    <Link href="/docs" className="text-primary/70 hover:text-primary transition-colors">Learn more →</Link>
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

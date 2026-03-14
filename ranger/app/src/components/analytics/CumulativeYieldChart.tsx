@@ -3,10 +3,12 @@
 import {
   AreaChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from 'recharts';
 import type { MetricsPoint } from '@/hooks/useMetricsHistory';
@@ -20,29 +22,42 @@ interface CumulativeYieldChartProps {
 interface CumulativePoint {
   timestamp: number;
   yieldEurc: number;
+  bestSingleYield: number;
   tvlEurc: number;
 }
 
 /**
  * Derive cumulative yield from TVL history.
- * Yield = TVL(t) - TVL(0)  (simplified — ignores net inflows)
+ * Compares blended strategy vs best single protocol.
  */
 function buildCumulativeData(points: MetricsPoint[], depositEurc: number): CumulativePoint[] {
   if (points.length === 0) return [];
 
-  // Use the first point's TVL as the baseline, scaled to the user's deposit
   const baseTvl = points[0].tvlEurc;
+  if (baseTvl <= 0) return [];
   const scale = depositEurc / baseTvl;
 
-  // Down-sample to max 100 points for performance
+  // Track cumulative yield from the best single protocol at each step
+  let bestCumulativeYield = 0;
+
   const step = Math.max(1, Math.floor(points.length / 100));
   return points
     .filter((_, i) => i % step === 0)
-    .map((p) => ({
-      timestamp: p.timestamp,
-      tvlEurc: parseFloat((p.tvlEurc * scale).toFixed(2)),
-      yieldEurc: parseFloat(Math.max(0, (p.tvlEurc - baseTvl) * scale).toFixed(2)),
-    }));
+    .map((p, idx) => {
+      // Best single protocol APY at this point
+      const bestApy = Math.max(p.driftApyPct, p.kaminoApyPct, p.saveApyPct);
+      // Accrual covers `step` intervals of 15 min each = step/(365*96) of a year
+      if (idx > 0) {
+        bestCumulativeYield += (depositEurc + bestCumulativeYield) * (bestApy / 100) * step / (365 * 96);
+      }
+
+      return {
+        timestamp: p.timestamp,
+        tvlEurc: parseFloat((p.tvlEurc * scale).toFixed(2)),
+        yieldEurc: parseFloat(Math.max(0, (p.tvlEurc - baseTvl) * scale).toFixed(4)),
+        bestSingleYield: parseFloat(bestCumulativeYield.toFixed(4)),
+      };
+    });
 }
 
 function formatDate(ts: number): string {
@@ -53,10 +68,8 @@ function formatDate(ts: number): string {
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
 
-  const yieldVal = (payload as Array<{ value: number }>)[0]?.value ?? 0;
-
   return (
-    <div className="rounded-xl border border-border bg-card p-3 shadow-lg text-xs">
+    <div className="rounded-xl border border-border bg-card p-3 shadow-lg text-xs space-y-1">
       <p className="text-muted-foreground mb-1">
         {new Date(label as number).toLocaleDateString('en-US', {
           month: 'short',
@@ -65,13 +78,17 @@ function CustomTooltip({ active, payload, label }: any) {
           minute: '2-digit',
         })}
       </p>
-      <div className="flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full bg-emerald-500" />
-        <span className="text-muted-foreground">Yield earned</span>
-        <span className="font-semibold text-emerald-400 tabular-nums">
-          {yieldVal.toFixed(4)} EURC
-        </span>
-      </div>
+      {(payload as Array<{ name: string; value: number; color: string }>).map((entry) => (
+        <div key={entry.name} className="flex items-center gap-2 justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
+            <span className="text-muted-foreground">{entry.name}</span>
+          </div>
+          <span className="font-semibold tabular-nums" style={{ color: entry.color }}>
+            {entry.value.toFixed(4)} EURC
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -86,6 +103,17 @@ export function CumulativeYieldChart({
       <div className="rounded-2xl border border-border bg-card p-6">
         <div className="h-5 w-44 rounded bg-secondary animate-pulse mb-4" />
         <div className="h-52 w-full rounded-xl bg-secondary/30 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (data.length === 0) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6">
+        <h2 className="text-base font-semibold text-foreground mb-2">Cumulative Yield</h2>
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-sm text-muted-foreground">No yield data available yet</p>
+        </div>
       </div>
     );
   }
@@ -139,14 +167,33 @@ export function CumulativeYieldChart({
             tickLine={false}
           />
           <Tooltip content={<CustomTooltip />} />
+          <Legend
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+            formatter={(value) => (
+              <span style={{ color: '#94A3B8' }}>{value}</span>
+            )}
+          />
           <Area
             type="monotone"
             dataKey="yieldEurc"
+            name="Blended Strategy"
             stroke="#10B981"
             strokeWidth={2}
             fill="url(#yieldGradient)"
             dot={false}
             activeDot={{ r: 4, strokeWidth: 0, fill: '#10B981' }}
+          />
+          <Line
+            type="monotone"
+            dataKey="bestSingleYield"
+            name="Best Single Protocol"
+            stroke="#8B5CF6"
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            dot={false}
+            activeDot={{ r: 3, strokeWidth: 0, fill: '#8B5CF6' }}
           />
         </AreaChart>
       </ResponsiveContainer>

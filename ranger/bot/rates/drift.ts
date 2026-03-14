@@ -55,7 +55,7 @@ function mockDriftRate(): ProtocolRate {
     utilization: 0.72,
     availableLiquidity: 500_000 * 1_000_000,
     fetchedAt: new Date(),
-    isStale: false,
+    isStale: true, // Mock rates must be flagged stale to prevent rebalancing on random data
   };
 }
 

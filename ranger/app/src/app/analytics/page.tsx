@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { TrendingUp, ArrowRightLeft, Layers, Activity } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
+import { usePageTitle } from '@/hooks/usePageTitle';
 import { ApyTrendChart } from '@/components/analytics/ApyTrendChart';
 import { CumulativeYieldChart } from '@/components/analytics/CumulativeYieldChart';
 import { EarningsCalculator } from '@/components/analytics/EarningsCalculator';
@@ -12,7 +13,8 @@ import { useRangerMetrics } from '@/hooks/useRangerMetrics';
 const DEPOSIT_OPTIONS = [1_000, 5_000, 10_000, 50_000, 100_000] as const;
 
 export default function AnalyticsPage() {
-  const { history, loading: historyLoading, isLive } = useMetricsHistory(7);
+  usePageTitle('Analytics');
+  const { history, loading: historyLoading } = useMetricsHistory(7);
   const { metrics, loading: metricsLoading } = useRangerMetrics();
   const [simulatedDeposit, setSimulatedDeposit] = useState<number>(10_000);
 
@@ -32,29 +34,19 @@ export default function AnalyticsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
-            {isLive ? (
-              <>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                </span>
-                <span className="text-xs font-medium text-emerald-400">Live data</span>
-              </>
-            ) : (
-              <>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/50 opacity-50" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                </span>
-                <span className="text-xs font-medium text-primary">Demo mode</span>
-              </>
-            )}
-          </div>
         </div>
 
         {/* Summary stats */}
-        {!metricsLoading && metrics && (
+        {metricsLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="rounded-xl border border-border bg-card px-4 py-3">
+                <div className="h-3 w-16 rounded bg-secondary animate-pulse mb-2" />
+                <div className="h-6 w-20 rounded bg-secondary animate-pulse" />
+              </div>
+            ))}
+          </div>
+        ) : metrics && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
             {[
               { label: 'Blended APY',   value: `${metrics.currentApyPct.toFixed(2)}%`,  accent: 'text-emerald-400' },

@@ -14,44 +14,112 @@ import type { RangerRate, RangerRatesDoc, ProtocolId } from "./types.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const EURC_MINT = "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr";
 const MAX_UTILIZATION = 0.85;
 const FETCH_TIMEOUT_MS = 10_000;
 
+// EURC reserve addresses
+const KAMINO_MARKET = "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF";
+const KAMINO_EURC_RESERVE = "EGPE45iPkme8G8C1xFDNZoZeHdP3aRYtaAfAQuuwrcGZ";
+const SAVE_EURC_RESERVE = "ECNduHkbaQL5mgNenGCwYhXtdv4tqVjeRcCYwUeQQHc1";
+
 /** Conservative fallback APYs if a protocol API is unreachable */
 const FALLBACK_APYS: Record<ProtocolId, number> = {
-  drift: 0.075,
-  kamino: 0.065,
-  save: 0.055,
+  drift: 0.009,
+  kamino: 0.003,
+  save: 0.002,
 };
 
 // ─── Protocol rate fetchers ───────────────────────────────────────────────────
 
 /**
- * Fetch EURC supply rate from Kamino Finance REST API.
- * Endpoint: GET https://api.kamino.finance/v2/reserves?env=mainnet-beta
+ * Drift: GET /stats/EURC/rateHistory/deposit
+ * Returns { success, rates: [[timestamp, annualizedDecimal], ...] }
+ */
+async function fetchDriftRate(): Promise<RangerRate> {
+  const url = "https://data.api.drift.trade/stats/EURC/rateHistory/deposit";
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(`Drift API ${res.status}`);
+
+  const data = (await res.json()) as {
+    success?: boolean;
+    rates?: Array<[number, number]>;
+  };
+  if (!data.success || !data.rates?.length)
+    throw new Error("No Drift rate data");
+
+  const latestRate = data.rates[data.rates.length - 1][1];
+
+  // Fetch utilization from market stats
+  let utilization = 0;
+  try {
+    const mktRes = await fetch(
+      "https://data.api.drift.trade/stats/markets",
+      { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
+    );
+    if (mktRes.ok) {
+      const body = (await mktRes.json()) as {
+        markets?: Array<{
+          symbol?: string;
+          deposits?: string;
+          borrows?: string;
+        }>;
+      };
+      const eurc = body.markets?.find((m) => m.symbol === "EURC");
+      if (eurc) {
+        const deposits = parseFloat(eurc.deposits ?? "0");
+        const borrows = parseFloat(eurc.borrows ?? "0");
+        if (deposits > 0) utilization = borrows / deposits;
+      }
+    }
+  } catch {
+    /* utilization is optional */
+  }
+
+  return {
+    protocol: "drift",
+    apy: latestRate,
+    apyBps: Math.round(latestRate * 10_000),
+    utilization,
+    isStale: false,
+    fetchedAt: Date.now(),
+  };
+}
+
+/**
+ * Kamino: GET /kamino-market/{market}/reserves/{reserve}/metrics/history
+ * Returns { history: [{ metrics: { supplyInterestAPY, ... } }] }
  */
 async function fetchKaminoRate(): Promise<RangerRate> {
-  const url = "https://api.kamino.finance/v2/reserves?env=mainnet-beta";
+  const end = new Date().toISOString();
+  const start = new Date(Date.now() - 2 * 3600_000).toISOString();
+  const url = `https://api.kamino.finance/kamino-market/${KAMINO_MARKET}/reserves/${KAMINO_EURC_RESERVE}/metrics/history?start=${start}&end=${end}`;
 
   const res = await fetch(url, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: { Accept: "application/json" },
   });
-
   if (!res.ok) throw new Error(`Kamino API ${res.status}`);
 
-  const data = (await res.json()) as Array<{
-    mintAddress?: string;
-    supplyInterestAPY?: number;
-    utilizationRate?: number;
-  }>;
+  const data = (await res.json()) as {
+    history?: Array<{
+      metrics?: {
+        supplyInterestAPY?: number;
+        totalSupply?: string;
+        totalBorrows?: string;
+      };
+    }>;
+  };
 
-  const reserve = data.find((r) => r.mintAddress === EURC_MINT);
-  if (!reserve) throw new Error("EURC reserve not found in Kamino response");
+  const latest = data.history?.[data.history.length - 1]?.metrics;
+  if (!latest) throw new Error("No Kamino metrics data");
 
-  const apy = (reserve.supplyInterestAPY ?? 0) / 100; // API returns e.g. 7.5 for 7.5%
-  const utilization = reserve.utilizationRate ?? 0;
+  const apy = latest.supplyInterestAPY ?? 0;
+  const supply = parseFloat(latest.totalSupply ?? "0");
+  const borrows = parseFloat(latest.totalBorrows ?? "0");
+  const utilization = supply > 0 ? borrows / supply : 0;
 
   return {
     protocol: "kamino",
@@ -64,76 +132,44 @@ async function fetchKaminoRate(): Promise<RangerRate> {
 }
 
 /**
- * Fetch EURC supply rate from Drift Protocol.
- * Uses Drift's public stats API for spot market rates.
- * Spot market index 15 = EURC on mainnet.
- */
-async function fetchDriftRate(): Promise<RangerRate> {
-  // Drift's public market stats endpoint
-  const DRIFT_SPOT_MARKET_INDEX = Number(
-    process.env.DRIFT_SPOT_MARKET_INDEX ?? "15",
-  );
-  const url = `https://data.api.drift.trade/spot/market/stats?marketIndex=${DRIFT_SPOT_MARKET_INDEX}`;
-
-  const res = await fetch(url, {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    headers: { Accept: "application/json" },
-  });
-
-  if (!res.ok) throw new Error(`Drift API ${res.status}`);
-
-  const data = (await res.json()) as {
-    depositRate?: number;
-    utilizationRatio?: number;
-    supplyApy?: number;
-  };
-
-  // Drift returns rates as percentages (e.g. 8.2 for 8.2%)
-  const rawApy = data.supplyApy ?? data.depositRate ?? 0;
-  const apy = rawApy > 1 ? rawApy / 100 : rawApy; // normalize if needed
-  const utilization = data.utilizationRatio ?? 0;
-
-  return {
-    protocol: "drift",
-    apy,
-    apyBps: Math.round(apy * 10_000),
-    utilization,
-    isStale: false,
-    fetchedAt: Date.now(),
-  };
-}
-
-/**
- * Fetch EURC supply rate from Save Finance (formerly Solend).
- * Uses Save's REST API for reserve data.
+ * Save: GET /v1/reserves?ids={reserveAddress}
+ * Returns { results: [{ rates: { supplyInterest: "0.23" }, ... }] }
  */
 async function fetchSaveRate(): Promise<RangerRate> {
-  const url = "https://api.save.finance/v1/reserves";
-
+  const url = `https://api.save.finance/v1/reserves?ids=${SAVE_EURC_RESERVE}`;
   const res = await fetch(url, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: { Accept: "application/json" },
   });
-
   if (!res.ok) throw new Error(`Save API ${res.status}`);
 
-  const data = (await res.json()) as Array<{
-    mintAddress?: string;
-    supplyApy?: number;
-    utilizationRate?: number;
-    liquidityMint?: string;
-  }>;
+  const data = (await res.json()) as {
+    results?: Array<{
+      rates?: { supplyInterest?: string };
+      reserve?: {
+        liquidity?: {
+          availableAmount?: string;
+          borrowedAmountWads?: string;
+        };
+      };
+    }>;
+  };
 
-  // Try both mintAddress and liquidityMint fields
-  const reserve = data.find(
-    (r) => r.mintAddress === EURC_MINT || r.liquidityMint === EURC_MINT,
-  );
+  const result = data.results?.[0];
+  if (!result?.rates) throw new Error("No Save rates data");
 
-  if (!reserve) throw new Error("EURC reserve not found in Save response");
+  const apyPct = parseFloat(result.rates.supplyInterest ?? "0");
+  const apy = apyPct / 100;
 
-  const rawApy = reserve.supplyApy ?? 0;
-  const apy = rawApy > 1 ? rawApy / 100 : rawApy; // normalize
-  const utilization = reserve.utilizationRate ?? 0;
+  let utilization = 0;
+  const liq = result.reserve?.liquidity;
+  if (liq) {
+    const available = parseFloat(liq.availableAmount ?? "0") / 1e6;
+    const borrowed =
+      parseFloat(liq.borrowedAmountWads ?? "0") / 1e18 / 1e6;
+    const total = available + borrowed;
+    if (total > 0) utilization = borrowed / total;
+  }
 
   return {
     protocol: "save",
@@ -166,7 +202,9 @@ async function fetchWithFallback(
 ): Promise<RangerRate> {
   try {
     const rate = await fetcher();
-    logger.debug(`[fetchRates] ${protocol}: ${(rate.apy * 100).toFixed(2)}% APY`);
+    logger.debug(
+      `[fetchRates] ${protocol}: ${(rate.apy * 100).toFixed(2)}% APY`,
+    );
     return rate;
   } catch (err) {
     logger.warn(`[fetchRates] ${protocol} fetch failed — using fallback`, {

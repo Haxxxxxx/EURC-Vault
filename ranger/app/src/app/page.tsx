@@ -1,12 +1,16 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { ArrowRight, TrendingUp, Shield, Zap, BarChart3, ArrowRightLeft } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
+import { Footer } from '@/components/layout/Footer';
 import { RateComparison } from '@/components/dashboard/RateComparison';
+import { ProtocolIcon } from '@/components/ui/ProtocolIcon';
 import { useRangerRates } from '@/hooks/useRangerRates';
 import { useRangerMetrics } from '@/hooks/useRangerMetrics';
-import { PROTOCOL_META } from '@/lib/constants';
+import { useToast } from '@/components/ui/Toast';
+import { PROTOCOL_META, REBALANCE_MIN_SPREAD_BPS } from '@/lib/constants';
 import { clsx } from 'clsx';
 
 function StatCard({
@@ -67,12 +71,7 @@ function ProtocolFlowVisual() {
               className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl border border-border shadow-md"
               style={{ backgroundColor: `${PROTOCOL_META[id].color}15` }}
             >
-              <span
-                className="text-xs sm:text-sm font-bold"
-                style={{ color: PROTOCOL_META[id].color }}
-              >
-                {PROTOCOL_META[id].label.charAt(0)}
-              </span>
+              <ProtocolIcon protocol={id} size={20} />
             </div>
             <div className="hidden sm:flex flex-col">
               <span className="text-xs font-medium text-foreground">{PROTOCOL_META[id].label}</span>
@@ -101,6 +100,19 @@ function ProtocolFlowVisual() {
 export default function HomePage() {
   const { rates, loading: ratesLoading } = useRangerRates();
   const { metrics, loading: metricsLoading } = useRangerMetrics();
+  const { toast } = useToast();
+  const hasShownSpreadAlert = useRef(false);
+
+  useEffect(() => {
+    if (!rates || hasShownSpreadAlert.current) return;
+    if (rates.spreadBps >= REBALANCE_MIN_SPREAD_BPS) {
+      toast(
+        `${PROTOCOL_META[rates.best].label} at ${(rates[rates.best].apy * 100).toFixed(2)}% vs ${PROTOCOL_META[rates.worst].label} at ${(rates[rates.worst].apy * 100).toFixed(2)}% — ${rates.spreadBps} bps spread`,
+        { type: 'info', title: 'Rate Spread Alert', duration: 8000 },
+      );
+      hasShownSpreadAlert.current = true;
+    }
+  }, [rates, toast]);
 
   const loading = ratesLoading || metricsLoading;
 
@@ -122,10 +134,23 @@ export default function HomePage() {
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
         {/* Hero */}
         <div className="mb-12 text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 mb-6">
-            <Zap className="h-3.5 w-3.5 text-primary" />
-            <span className="text-sm font-medium text-primary">Powered by Ranger Earn</span>
+          {/* Badges */}
+          <div className="flex items-center justify-center gap-3 mb-6 flex-wrap">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5">
+              <Zap className="h-3.5 w-3.5 text-primary" />
+              <span className="text-sm font-medium text-primary">Powered by Ranger Earn</span>
+            </div>
+            {rates && (
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                <span className="text-sm font-medium text-emerald-400 tabular-nums">
+                  {rates.spreadBps} bps spread — {PROTOCOL_META[rates.best].label} leading
+                </span>
+              </div>
+            )}
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground tracking-tight text-balance">
@@ -187,7 +212,7 @@ export default function HomePage() {
           <StatCard
             label="Rate Spread"
             value={spreadBps !== null ? `${spreadBps} bps` : '—'}
-            subtext={spreadBps !== null && spreadBps >= 50 ? 'Rebalance threshold met' : 'Below threshold'}
+            subtext={spreadBps === null ? 'Loading rates...' : spreadBps >= 50 ? 'Rebalance threshold met' : 'Below rebalance threshold'}
             loading={loading}
           />
           <StatCard
@@ -291,17 +316,45 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Dashboard CTA */}
-        <div className="mt-10 flex items-center justify-center">
+        {/* Fee disclosure + CTAs */}
+        <div className="mt-8 rounded-2xl border border-border bg-card p-5 max-w-3xl mx-auto">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <p className="text-sm text-foreground font-medium">
+                0.5% management fee · 10% performance fee on profits
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                No hidden fees. No lock-ups. Withdraw anytime.
+              </p>
+            </div>
+            <Link
+              href="/docs"
+              className="text-sm font-medium text-primary hover:text-primary-hover transition-colors whitespace-nowrap"
+            >
+              Learn more →
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-center gap-6">
           <Link
             href="/dashboard"
             className="group inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-primary-hover transition-colors"
           >
-            View Full Strategy Dashboard
+            View Strategy Dashboard
+            <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+          <Link
+            href="/docs"
+            className="group inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            How It Works
             <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
           </Link>
         </div>
       </main>
+
+      <Footer />
     </div>
   );
 }

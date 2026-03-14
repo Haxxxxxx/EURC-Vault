@@ -42,6 +42,8 @@ import {
   SAVE_COLLATERAL_MINT,
   SAVE_LENDING_MARKET,
   SAVE_PYTH_ORACLE,
+  COMPUTE_UNIT_LIMIT,
+  PRIORITY_FEE_MICRO_LAMPORTS,
   SAVE_SWITCHBOARD_ORACLE,
 } from '../config.js';
 import {
@@ -149,8 +151,8 @@ async function buildAndSign(
   manager: Keypair,
   instructions: TransactionInstruction[],
 ): Promise<VersionedTransaction> {
-  const computeBudget = ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 });
-  const priorityFee   = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 5_000 });
+  const computeBudget = ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNIT_LIMIT });
+  const priorityFee   = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: PRIORITY_FEE_MICRO_LAMPORTS });
 
   const allIxs = [computeBudget, priorityFee, ...instructions];
 
