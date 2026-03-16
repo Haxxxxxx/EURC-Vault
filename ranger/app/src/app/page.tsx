@@ -185,7 +185,7 @@ export default function HomePage() {
           <StatCard
             label="Current APY"
             value={currentApy !== null ? `${currentApy.toFixed(2)}%` : '—'}
-            subtext="Blended across protocols"
+            subtext="Live blended rate (target 10%+ in active markets)"
             loading={loading}
             accent="text-emerald-400"
           />
