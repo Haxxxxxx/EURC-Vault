@@ -49,7 +49,7 @@ function EventCard({ event }: { event: ActivityEvent }) {
   const Icon = config.icon;
 
   return (
-    <div className="group relative flex gap-4 rounded-xl border border-border bg-card p-4 hover:border-primary/20 transition-all">
+    <div className="group relative flex gap-4 rounded-xl border border-border bg-card p-4 hover:border-primary/20 hover:shadow-sm transition-all duration-150">
       {/* Icon */}
       <div className={clsx(
         'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1',

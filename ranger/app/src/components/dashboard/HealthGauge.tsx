@@ -118,10 +118,10 @@ export function HealthGauge({ metrics, loading }: HealthGaugeProps) {
             <div className="relative">
               <ArcGauge score={score} stroke={colors.stroke} />
               <div className="absolute inset-0 flex flex-col items-center justify-center pt-4">
-                <span className={clsx('text-3xl font-bold tabular-nums', colors.text)}>
+                <span className={clsx('text-3xl font-bold tabular-nums drop-shadow-sm', colors.text)}>
                   {score}
                 </span>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+                <span className={clsx('text-[10px] uppercase tracking-wider mt-0.5 font-medium', score >= 80 ? 'text-emerald-400/70' : score >= 60 ? 'text-yellow-400/70' : 'text-red-400/70')}>
                   {getHealthLabel(score)}
                 </span>
               </div>

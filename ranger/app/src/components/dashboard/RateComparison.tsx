@@ -71,10 +71,10 @@ export function RateComparison({ rates, loading }: RateComparisonProps) {
               <div
                 key={id}
                 className={clsx(
-                  'rounded-xl border p-4 transition-all',
+                  'rounded-xl border p-4 transition-all duration-200 hover:shadow-sm',
                   isBest
-                    ? 'border-emerald-500/30 bg-emerald-500/5'
-                    : 'border-border bg-background-surface/50',
+                    ? 'border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50'
+                    : 'border-border bg-background-surface/50 hover:border-border/80',
                 )}
               >
                 <div className="flex items-center justify-between mb-2.5">

@@ -81,10 +81,10 @@ export default function AnalyticsPage() {
               <button
                 key={amount}
                 onClick={() => setSimulatedDeposit(amount)}
-                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition-all ${
+                className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 ${
                   simulatedDeposit === amount
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-secondary text-muted-foreground hover:text-foreground'
+                    ? 'bg-primary text-primary-foreground shadow-sm shadow-primary/20'
+                    : 'bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80'
                 }`}
               >
                 {amount >= 1_000 ? `€${amount / 1_000}K` : `€${amount}`}

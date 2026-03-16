@@ -73,7 +73,7 @@ export function RebalanceHistory({ history, loading }: RebalanceHistoryProps) {
           displayed.map((record) => {
             const isRebalance = record.decision === 'REBALANCE';
             return (
-              <div key={record.timestamp} className="flex items-start gap-3 p-4 hover:bg-secondary/20 transition-colors">
+              <div key={record.timestamp} className="flex items-start gap-3 p-4 hover:bg-secondary/30 transition-all duration-150">
                 {/* Icon */}
                 <div
                   className={clsx(
