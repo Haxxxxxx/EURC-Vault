@@ -16,6 +16,7 @@ export function Navbar() {
     { label: 'Simulator',  href: '/simulator'  },
     { label: 'Activity',   href: '/activity'   },
     { label: 'Docs',       href: '/docs'       },
+    { label: 'Account',    href: '/account'    },
     { label: 'Deposit',    href: '/deposit'    },
   ];
 
