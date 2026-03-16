@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { fetchRatesData } from '@/lib/fetchRates';
 import { generateRebalanceRecords } from '@/lib/liveData';
 import type { RangerRatesDoc, RebalanceRecord } from '@/lib/types';
 
@@ -34,12 +35,8 @@ export function useRebalanceHistory(maxItems = 20) {
       return unsub;
     }
 
-    // No Firebase — generate from live API rates
-    fetch('/api/rates')
-      .then((res) => {
-        if (!res.ok) throw new Error(`API ${res.status}`);
-        return res.json();
-      })
+    // No Firebase — generate from live protocol rates
+    fetchRatesData()
       .then((rates: RangerRatesDoc) => {
         setHistory(generateRebalanceRecords(maxItems, rates));
         setLoading(false);

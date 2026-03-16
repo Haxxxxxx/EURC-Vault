@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { fetchRatesData } from '@/lib/fetchRates';
 import { generateMetricsHistory } from '@/lib/liveData';
 import type { RangerRatesDoc } from '@/lib/types';
 
@@ -48,12 +49,8 @@ export function useMetricsHistory(days = 7) {
       return unsub;
     }
 
-    // No Firebase — generate history from live API rates
-    fetch('/api/rates')
-      .then((res) => {
-        if (!res.ok) throw new Error(`API ${res.status}`);
-        return res.json();
-      })
+    // No Firebase — generate history from live protocol rates
+    fetchRatesData()
       .then((rates: RangerRatesDoc) => {
         setHistory(generateMetricsHistory(days, rates));
         setLoading(false);

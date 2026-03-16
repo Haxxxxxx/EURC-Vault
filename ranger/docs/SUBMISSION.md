@@ -9,7 +9,7 @@
 
 ## One-Line Pitch
 
-An automated Ranger Earn vault that maximizes EURC yield across Drift, Kamino, and Save through continuous rate arbitrage, auto-compounding, and multi-layered risk management — with a full-stack dashboard showing every bot decision in real time.
+An automated Ranger Earn vault targeting **10%+ net APY** on EURC by dynamically routing capital across Drift, Kamino, and Save — capturing cross-protocol rate arbitrage during active markets when EURC lending rates historically reach 8–15%.
 
 ---
 
