@@ -236,9 +236,9 @@ export default function HomePage() {
 
           {/* Feature cards (1/3 width) */}
           <div className="space-y-4">
-            <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="group rounded-2xl border border-border bg-card p-5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all duration-200">
               <div className="flex items-center gap-3 mb-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 group-hover:scale-110 transition-transform">
                   <TrendingUp className="h-4.5 w-4.5 text-primary" />
                 </div>
                 <h3 className="font-semibold text-foreground">Rate Arbitrage</h3>
@@ -248,9 +248,9 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="group rounded-2xl border border-border bg-card p-5 hover:border-violet-500/30 hover:shadow-lg hover:shadow-violet-500/5 transition-all duration-200">
               <div className="flex items-center gap-3 mb-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/10 group-hover:scale-110 transition-transform">
                   <BarChart3 className="h-4.5 w-4.5 text-violet-400" />
                 </div>
                 <h3 className="font-semibold text-foreground">Auto-Compound</h3>
@@ -260,9 +260,9 @@ export default function HomePage() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-border bg-card p-5">
+            <div className="group rounded-2xl border border-border bg-card p-5 hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/5 transition-all duration-200">
               <div className="flex items-center gap-3 mb-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 group-hover:scale-110 transition-transform">
                   <Shield className="h-4.5 w-4.5 text-emerald-400" />
                 </div>
                 <h3 className="font-semibold text-foreground">Circuit Breaker</h3>
@@ -281,7 +281,7 @@ export default function HomePage() {
             Deposit EURC and receive pbEURC — yield-bearing receipt tokens that grow in value as the vault earns.
           </p>
           <div className="grid sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
-            <div className="rounded-2xl border border-border bg-card p-5 text-center">
+            <div className="rounded-2xl border border-border bg-card p-5 text-center hover:border-primary/20 hover:shadow-md transition-all duration-200">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 mx-auto mb-3">
                 <span className="text-sm font-bold text-primary">1</span>
               </div>
@@ -290,7 +290,7 @@ export default function HomePage() {
                 Connect your wallet and deposit EURC into the vault. You receive pbEURC shares in return.
               </p>
             </div>
-            <div className="rounded-2xl border border-border bg-card p-5 text-center">
+            <div className="rounded-2xl border border-border bg-card p-5 text-center hover:border-violet-500/20 hover:shadow-md transition-all duration-200">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-500/10 mx-auto mb-3">
                 <span className="text-sm font-bold text-violet-400">2</span>
               </div>
@@ -299,7 +299,7 @@ export default function HomePage() {
                 The bot monitors rates across Drift, Kamino, and Save — rebalancing to the highest-yield protocol automatically.
               </p>
             </div>
-            <div className="rounded-2xl border border-border bg-card p-5 text-center">
+            <div className="rounded-2xl border border-border bg-card p-5 text-center hover:border-emerald-500/20 hover:shadow-md transition-all duration-200">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 mx-auto mb-3">
                 <span className="text-sm font-bold text-emerald-400">3</span>
               </div>

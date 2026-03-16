@@ -471,9 +471,9 @@ export default function DepositPage() {
             )}
 
             {/* Arrow divider */}
-            <div className="flex items-center justify-center">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-secondary">
-                <ArrowDownUp className="h-3.5 w-3.5 text-muted-foreground" />
+            <div className="flex items-center justify-center group/arrow">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-secondary group-hover/arrow:border-primary/30 group-hover/arrow:bg-primary/5 transition-all duration-200">
+                <ArrowDownUp className="h-3.5 w-3.5 text-muted-foreground group-hover/arrow:text-primary group-hover/arrow:scale-110 transition-all" />
               </div>
             </div>
 

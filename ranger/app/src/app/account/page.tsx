@@ -42,7 +42,7 @@ function StatCard({
   accent?: string;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="rounded-xl border border-border bg-card p-4 hover:border-border/80 hover:shadow-sm transition-all">
       <div className="flex items-center gap-1.5 mb-1.5">
         <Icon className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</span>
