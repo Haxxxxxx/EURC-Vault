@@ -148,9 +148,9 @@ export default function HomePage() {
             )}
           </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground tracking-tight text-balance">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-foreground tracking-tight text-balance leading-[1.1]">
             EURC Cross-Protocol
-            <span className="block gradient-text">Yield Optimizer</span>
+            <span className="block gradient-text drop-shadow-[0_0_30px_rgba(59,130,246,0.15)]">Yield Optimizer</span>
           </h1>
 
           <p className="mt-5 max-w-2xl mx-auto text-lg text-muted-foreground text-balance">

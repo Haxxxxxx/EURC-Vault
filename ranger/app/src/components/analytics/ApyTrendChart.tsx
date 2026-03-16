@@ -98,6 +98,12 @@ export function ApyTrendChart({ data, loading }: ApyTrendChartProps) {
 
       <ResponsiveContainer width="100%" height={280}>
         <LineChart data={chartData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+          <defs>
+            <linearGradient id="blendedApyGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#F1F5F9" stopOpacity={0.15} />
+              <stop offset="100%" stopColor="#F1F5F9" stopOpacity={0} />
+            </linearGradient>
+          </defs>
           <CartesianGrid
             strokeDasharray="3 3"
             stroke="rgba(255,255,255,0.06)"
@@ -172,7 +178,7 @@ export function ApyTrendChart({ data, loading }: ApyTrendChartProps) {
             activeDot={{ r: 4, strokeWidth: 0 }}
           />
 
-          {/* Blended APY — thicker, white, prominent */}
+          {/* Blended APY — thicker, white, prominent with glow */}
           <Line
             type="monotone"
             dataKey="currentApyPct"
@@ -180,8 +186,9 @@ export function ApyTrendChart({ data, loading }: ApyTrendChartProps) {
             stroke="#F1F5F9"
             strokeWidth={2.5}
             dot={false}
-            activeDot={{ r: 5, strokeWidth: 0 }}
+            activeDot={{ r: 6, strokeWidth: 2, stroke: '#F1F5F9', fill: 'var(--card)' }}
             strokeDasharray="0"
+            filter="drop-shadow(0 0 4px rgba(241,245,249,0.3))"
           />
         </LineChart>
       </ResponsiveContainer>
