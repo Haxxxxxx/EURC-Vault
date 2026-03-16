@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import type { RangerMetrics } from '@/lib/types';
 import { PROTOCOL_META } from '@/lib/constants';
+import { ProtocolIcon } from '@/components/ui/ProtocolIcon';
 
 interface EarningsCalculatorProps {
   metrics: RangerMetrics | null;
@@ -145,10 +146,7 @@ export function EarningsCalculator({ metrics }: EarningsCalculatorProps) {
             ).map(([proto, apy, alloc]) => (
               <div key={proto} className="flex items-center justify-between text-[11px]">
                 <div className="flex items-center gap-1.5">
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ backgroundColor: PROTOCOL_META[proto].color }}
-                  />
+                  <ProtocolIcon protocol={proto} size={10} />
                   <span className="text-muted-foreground">
                     {PROTOCOL_META[proto].label} ({alloc})
                   </span>

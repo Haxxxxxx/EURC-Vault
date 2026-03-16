@@ -5,13 +5,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { computeAllocation } from '@/lib/allocation';
 import { useRangerMetrics } from '@/hooks/useRangerMetrics';
 import { ProtocolIcon } from '@/components/ui/ProtocolIcon';
+import { formatTvl } from '@/lib/format';
 import type { ProtocolId, RangerRatesDoc } from '@/lib/types';
-
-function formatTvl(tvl: number): string {
-  if (tvl >= 1_000_000) return `€${(tvl / 1_000_000).toFixed(2)}M`;
-  if (tvl >= 1_000) return `€${(tvl / 1_000).toFixed(1)}K`;
-  return `€${tvl.toFixed(0)}`;
-}
 
 interface CustomTooltipProps {
   active?: boolean;
@@ -98,9 +93,9 @@ export function AllocationChart({ rates }: AllocationChartProps) {
       </div>
 
       {/* Legend */}
-      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2">
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5">
         {chartData.map((entry) => (
-          <div key={entry.id} className="flex items-center gap-2">
+          <div key={entry.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 -mx-2 hover:bg-secondary/30 transition-colors">
             {entry.id === 'idle' ? (
               <span
                 className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
@@ -110,7 +105,7 @@ export function AllocationChart({ rates }: AllocationChartProps) {
               <ProtocolIcon protocol={entry.id as ProtocolId} size={14} />
             )}
             <span className="text-xs text-muted-foreground">{entry.name}</span>
-            <span className="ml-auto text-xs font-medium text-foreground tabular-nums">{entry.value}%</span>
+            <span className="ml-auto text-xs font-semibold tabular-nums" style={{ color: entry.color }}>{entry.value}%</span>
           </div>
         ))}
       </div>

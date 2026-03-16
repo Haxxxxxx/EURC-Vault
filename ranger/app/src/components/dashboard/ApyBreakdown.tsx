@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { PROTOCOL_META } from '@/lib/constants';
 import { computeAllocation } from '@/lib/allocation';
+import { ProtocolIcon } from '@/components/ui/ProtocolIcon';
 import type { RangerRatesDoc, RangerMetrics, ProtocolId } from '@/lib/types';
 import { clsx } from 'clsx';
 import { CheckCircle, AlertTriangle } from 'lucide-react';
@@ -105,10 +106,7 @@ export function ApyBreakdown({ rates, metrics, loading }: ApyBreakdownProps) {
                     {/* Protocol name */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span
-                          className="h-2 w-2 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: meta.color }}
-                        />
+                        <ProtocolIcon protocol={id} size={14} />
                         <span className="font-medium" style={{ color: meta.color }}>
                           {meta.label}
                         </span>

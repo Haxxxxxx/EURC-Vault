@@ -396,7 +396,7 @@ export default function DepositPage() {
         )}
 
         {/* Main card */}
-        <div className="rounded-2xl border border-border bg-card shadow-xl shadow-black/10">
+        <div className="rounded-2xl border border-border bg-card shadow-xl shadow-black/10 ring-1 ring-border/50">
 
           {/* Tabs */}
           <div className="flex border-b border-border">
