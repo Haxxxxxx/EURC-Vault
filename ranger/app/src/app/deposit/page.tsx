@@ -21,7 +21,11 @@ import {
 } from '@solana/web3.js';
 import BN from 'bn.js';
 import { VoltrClient } from '@voltr/vault-sdk';
-import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import {
+  TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+} from '@solana/spl-token';
 import { Navbar } from '@/components/layout/Navbar';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useRangerMetrics } from '@/hooks/useRangerMetrics';
@@ -243,6 +247,26 @@ export default function DepositPage() {
       const client      = new VoltrClient(connection);
       const vaultPubkey = new PublicKey(VAULT_ADDRESS);
 
+      // Ensure user's EURC token account exists (create if missing)
+      const setupIxs: import('@solana/web3.js').TransactionInstruction[] = [];
+      const userEurcAta = await getAssociatedTokenAddress(EURC_MINT, publicKey);
+      const eurcAtaInfo = await connection.getAccountInfo(userEurcAta);
+      if (!eurcAtaInfo) {
+        setupIxs.push(
+          createAssociatedTokenAccountInstruction(publicKey, userEurcAta, publicKey, EURC_MINT),
+        );
+      }
+
+      // Ensure user's LP (pbEURC) token account exists
+      const { vaultLpMint } = await client.findVaultAddresses(vaultPubkey);
+      const userLpAta = await getAssociatedTokenAddress(vaultLpMint, publicKey);
+      const lpAtaInfo = await connection.getAccountInfo(userLpAta);
+      if (!lpAtaInfo) {
+        setupIxs.push(
+          createAssociatedTokenAccountInstruction(publicKey, userLpAta, publicKey, vaultLpMint),
+        );
+      }
+
       let ix;
       if (tab === 'deposit') {
         const atomsIn = new BN(Math.floor(parsedAmount * EURC_PRECISION));
@@ -267,7 +291,7 @@ export default function DepositPage() {
       }
 
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      const tx    = new Transaction().add(ix);
+      const tx    = new Transaction().add(...setupIxs, ix);
       const txSig = await sendTransaction(tx, connection, { skipPreflight: false });
       await connection.confirmTransaction(
         { signature: txSig, blockhash, lastValidBlockHeight },
