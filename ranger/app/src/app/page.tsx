@@ -165,7 +165,7 @@ export default function HomePage() {
           <div className="flex items-center justify-center gap-3 flex-wrap sm:gap-4">
             <Link
               href="/deposit"
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary-hover transition-colors shadow-lg shadow-primary/20"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary-hover active:scale-[0.97] transition-all shadow-lg shadow-primary/20"
             >
               Deposit EURC
               <ArrowRight className="h-4 w-4" />

@@ -344,7 +344,7 @@ function SliderControl({
         </span>
       </div>
 
-      <div className="relative h-2 rounded-full bg-secondary">
+      <div className="relative h-2.5 rounded-full bg-secondary">
         {/* Filled track */}
         <div
           className="absolute left-0 top-0 h-full rounded-full bg-primary transition-all duration-75"
@@ -366,8 +366,8 @@ function SliderControl({
         />
         {/* Thumb — rendered separately so it sits on top */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 h-4 w-4 rounded-full bg-primary shadow-md border-2 border-background pointer-events-none transition-all duration-75"
-          style={{ left: `calc(${pct}% - 8px)` }}
+          className="absolute top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-primary shadow-md border-2 border-background pointer-events-none transition-all duration-75"
+          style={{ left: `calc(${pct}% - 10px)` }}
         />
       </div>
 

@@ -26,7 +26,7 @@ export function Navbar() {
         <div className="flex h-16 items-center justify-between">
           {/* Left: Brand */}
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-emerald-500/20 ring-1 ring-primary/20 group-hover:ring-primary/40 transition-all">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/20 to-emerald-500/20 ring-1 ring-primary/30 group-hover:ring-primary/50 transition-all shadow-sm">
               <Zap className="h-4 w-4 text-primary" />
             </div>
             <div className="flex flex-col leading-none">
