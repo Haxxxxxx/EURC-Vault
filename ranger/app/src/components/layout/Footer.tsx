@@ -18,6 +18,9 @@ export function Footer() {
             <Link href="/docs" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               How It Works
             </Link>
+            <Link href="/faq" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              FAQ
+            </Link>
             <Link href="/simulator" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               Simulator
             </Link>
