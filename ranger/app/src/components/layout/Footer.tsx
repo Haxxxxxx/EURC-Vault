@@ -33,7 +33,7 @@ export function Footer() {
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Built on</span>
             <span className="font-medium text-foreground">Solana</span>
-            <span className="text-muted-foreground/50">·</span>
+            <span className="text-muted-foreground/30">·</span>
             <span>Powered by</span>
             <span className="font-medium text-foreground">Voltr</span>
           </div>

@@ -125,7 +125,7 @@ function FaqAccordion({ item, isOpen, onToggle }: { item: FaqItem; isOpen: boole
         )} />
       </button>
       {isOpen && (
-        <p className="pb-4 text-sm text-muted-foreground leading-relaxed -mt-1">
+        <p className="pb-4 text-sm text-muted-foreground leading-relaxed">
           {item.answer}
         </p>
       )}

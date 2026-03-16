@@ -780,7 +780,7 @@ export default function SimulatorPage() {
 
         {/* ── Summary stat cards ── */}
         {!isLoading && result && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 mb-6">
             <StatCard
               label="Total Return"
               value={`+€${result.totalReturnEurc.toFixed(2)}`}
@@ -832,7 +832,7 @@ export default function SimulatorPage() {
 
         {/* Skeleton stat cards */}
         {isLoading && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 mb-6">
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}

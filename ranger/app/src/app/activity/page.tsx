@@ -193,7 +193,7 @@ export default function ActivityPage() {
         {/* Filter tabs */}
         <div className="flex items-center gap-2 mb-4">
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <div className="flex gap-1.5">
+          <div className="flex gap-1 flex-wrap sm:gap-1.5">
             {FILTER_OPTIONS.map((opt) => (
               <button
                 key={opt.value}

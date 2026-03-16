@@ -65,7 +65,7 @@ function ProtocolFlowVisual() {
       </div>
 
       {/* Protocol nodes */}
-      <div className="flex flex-col items-center gap-2.5">
+      <div className="flex flex-col items-center gap-1.5 sm:gap-2.5">
         {(['drift', 'kamino', 'save'] as const).map((id) => (
           <div key={id} className="flex items-center gap-2">
             <div
@@ -162,7 +162,7 @@ export default function HomePage() {
           <ProtocolFlowVisual />
 
           {/* CTA */}
-          <div className="flex items-center justify-center gap-4 flex-wrap">
+          <div className="flex items-center justify-center gap-3 flex-wrap sm:gap-4">
             <Link
               href="/deposit"
               className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary-hover transition-colors shadow-lg shadow-primary/20"
