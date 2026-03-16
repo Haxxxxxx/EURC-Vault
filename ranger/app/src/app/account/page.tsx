@@ -278,7 +278,7 @@ export default function AccountPage() {
               Fee & Yield Projection
             </h2>
 
-            <div className="rounded-xl bg-emerald-500/8 border border-emerald-500/20 p-4 mb-4">
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/25 p-4 mb-4">
               <div className="flex items-baseline justify-between mb-1">
                 <span className="text-xs text-muted-foreground">Projected annual yield (at current rates)</span>
               </div>
@@ -358,7 +358,7 @@ export default function AccountPage() {
           <div className="grid sm:grid-cols-3 gap-3">
             <Link
               href="/deposit"
-              className="flex items-center gap-3 rounded-xl border border-border p-4 hover:bg-secondary/30 transition-colors"
+              className="flex items-center gap-3 rounded-xl border border-border p-4 hover:bg-secondary/50 transition-all"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                 <ArrowRight className="h-4 w-4 text-primary" />
@@ -370,7 +370,7 @@ export default function AccountPage() {
             </Link>
             <Link
               href="/dashboard"
-              className="flex items-center gap-3 rounded-xl border border-border p-4 hover:bg-secondary/30 transition-colors"
+              className="flex items-center gap-3 rounded-xl border border-border p-4 hover:bg-secondary/50 transition-all"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10">
                 <TrendingUp className="h-4 w-4 text-violet-400" />
@@ -382,7 +382,7 @@ export default function AccountPage() {
             </Link>
             <Link
               href="/simulator"
-              className="flex items-center gap-3 rounded-xl border border-border p-4 hover:bg-secondary/30 transition-colors"
+              className="flex items-center gap-3 rounded-xl border border-border p-4 hover:bg-secondary/50 transition-all"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10">
                 <ArrowRightLeft className="h-4 w-4 text-emerald-400" />

@@ -173,7 +173,7 @@ function OutputPreview({
         )}
       </div>
       <div className="flex items-center gap-3">
-        <span className="flex-1 text-2xl font-bold tabular-nums text-muted-foreground">
+        <span className={clsx('flex-1 text-2xl font-bold tabular-nums', amount !== null ? 'text-foreground' : 'text-muted-foreground')}>
           {amount !== null ? amount.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—'}
         </span>
         <div className="flex items-center gap-1.5 rounded-lg bg-card border border-border px-3 py-1.5 shrink-0">
@@ -537,7 +537,7 @@ export default function DepositPage() {
                   'w-full rounded-xl py-3 text-[0.9375rem] font-semibold transition-all',
                   canSubmit
                     ? 'bg-primary text-primary-foreground hover:bg-primary-hover shadow-lg shadow-primary/20 active:scale-[0.98]'
-                    : 'bg-secondary text-muted-foreground cursor-not-allowed',
+                    : 'bg-secondary/60 text-muted-foreground cursor-not-allowed opacity-70',
                 )}
               >
                 {txState.status === 'pending' ? (

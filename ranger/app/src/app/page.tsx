@@ -317,8 +317,8 @@ export default function HomePage() {
           <p className="text-sm text-muted-foreground text-center mb-6">
             How the optimizer compares to alternatives for EURC holders on Solana.
           </p>
-          <div className="rounded-2xl border border-border bg-card overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-2xl border border-border bg-card overflow-x-auto">
+            <table className="w-full text-sm min-w-[480px]">
               <thead>
                 <tr className="border-b border-border bg-secondary/30">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Strategy</th>
@@ -328,7 +328,7 @@ export default function HomePage() {
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b border-emerald-500/20 bg-emerald-500/5">
+                <tr className="border-b border-emerald-500/30 bg-emerald-500/8">
                   <td className="px-4 py-3 font-medium text-foreground flex items-center gap-2">
                     <span className="h-2 w-2 rounded-full bg-emerald-500" />
                     Ranger Optimizer

@@ -330,7 +330,7 @@ export default function DocsPage() {
             </div>
 
             {/* Risk disclaimer */}
-            <div className="mt-5 flex items-start gap-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-4">
+            <div className="mt-5 flex items-start gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/8 p-4">
               <AlertTriangle className="h-4 w-4 text-yellow-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-yellow-300">Risk Disclaimer</p>

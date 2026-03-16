@@ -44,7 +44,7 @@ export function Navbar() {
                   key={href}
                   href={href}
                   className={clsx(
-                    'rounded-md px-3 lg:px-4 py-1.5 text-xs lg:text-sm font-medium transition-all whitespace-nowrap',
+                    'rounded-md px-3.5 py-1.5 text-xs lg:text-sm font-medium transition-all whitespace-nowrap',
                     isActive
                       ? 'bg-background text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground hover:bg-background/50',
