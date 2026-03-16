@@ -311,6 +311,69 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* Why Ranger — comparison */}
+        <div className="mt-14 max-w-3xl mx-auto">
+          <h2 className="text-xl font-bold text-foreground text-center mb-2">Why Ranger?</h2>
+          <p className="text-sm text-muted-foreground text-center mb-6">
+            How the optimizer compares to alternatives for EURC holders on Solana.
+          </p>
+          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-secondary/30">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Strategy</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Expected APY</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Risk</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Effort</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-emerald-500/20 bg-emerald-500/5">
+                  <td className="px-4 py-3 font-medium text-foreground flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    Ranger Optimizer
+                  </td>
+                  <td className="text-center px-4 py-3 font-bold text-emerald-400 tabular-nums">10-15%</td>
+                  <td className="text-center px-4 py-3 text-xs text-muted-foreground">Diversified · Circuit breaker</td>
+                  <td className="text-center px-4 py-3 text-xs text-emerald-400 font-medium">None (automated)</td>
+                </tr>
+                <tr className="border-b border-border">
+                  <td className="px-4 py-3 font-medium text-foreground flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-blue-500" />
+                    Single Protocol (Drift)
+                  </td>
+                  <td className="text-center px-4 py-3 tabular-nums">5-10%</td>
+                  <td className="text-center px-4 py-3 text-xs text-muted-foreground">Concentrated · No safety net</td>
+                  <td className="text-center px-4 py-3 text-xs text-muted-foreground">Manual monitoring</td>
+                </tr>
+                <tr className="border-b border-border">
+                  <td className="px-4 py-3 font-medium text-foreground flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-slate-500" />
+                    Hold EURC (no yield)
+                  </td>
+                  <td className="text-center px-4 py-3 tabular-nums">0%</td>
+                  <td className="text-center px-4 py-3 text-xs text-muted-foreground">No smart contract risk</td>
+                  <td className="text-center px-4 py-3 text-xs text-muted-foreground">None</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-medium text-foreground flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                    Manual Rebalancing
+                  </td>
+                  <td className="text-center px-4 py-3 tabular-nums">8-12%</td>
+                  <td className="text-center px-4 py-3 text-xs text-muted-foreground">Depends on timing</td>
+                  <td className="text-center px-4 py-3 text-xs text-yellow-400 font-medium">24/7 monitoring</td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="px-4 py-2.5 bg-secondary/20 border-t border-border">
+              <p className="text-[11px] text-muted-foreground text-center">
+                APY ranges reflect active market conditions. During quiet periods, all strategies earn less.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Fee disclosure + CTAs */}
         <div className="mt-8 rounded-2xl border border-border bg-card p-5 max-w-3xl mx-auto">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">

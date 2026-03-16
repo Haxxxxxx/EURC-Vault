@@ -49,6 +49,22 @@ type TxState =
 /** Debounce delay for LP preview RPC calls (ms) */
 const LP_PREVIEW_DEBOUNCE_MS = 400;
 
+/** WalletMultiButton style — extracted to avoid re-creation on every render */
+const WALLET_BUTTON_STYLE: React.CSSProperties = {
+  width: '100%',
+  background: 'var(--primary)',
+  color: 'var(--primary-foreground)',
+  borderRadius: '0.75rem',
+  fontSize: '0.9375rem',
+  fontWeight: '600',
+  height: '3rem',
+  fontFamily: 'inherit',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '0.5rem',
+};
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StatPill({
@@ -108,13 +124,19 @@ function AmountInput({
       </div>
       <div className="flex items-center gap-3">
         <input
-          type="number"
-          min="0"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           placeholder="0.00"
           aria-label={label}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            // Strip non-numeric chars except '.', cap to 6 decimals (EURC precision)
+            let v = e.target.value.replace(/[^0-9.]/g, '');
+            const parts = v.split('.');
+            if (parts.length > 2) v = parts[0] + '.' + parts.slice(1).join('');
+            if (parts[1]?.length > 6) v = parts[0] + '.' + parts[1].slice(0, 6);
+            onChange(v);
+          }}
           className="flex-1 bg-transparent text-2xl font-bold text-foreground placeholder-muted-foreground/40 outline-none tabular-nums"
         />
         <div className="flex items-center gap-1.5 rounded-lg bg-card border border-border px-3 py-1.5 shrink-0">
@@ -506,22 +528,7 @@ export default function DepositPage() {
 
             {/* Action button */}
             {!connected ? (
-              <WalletMultiButton
-                style={{
-                  width: '100%',
-                  background: 'var(--primary)',
-                  color: 'var(--primary-foreground)',
-                  borderRadius: '0.75rem',
-                  fontSize: '0.9375rem',
-                  fontWeight: '600',
-                  height: '3rem',
-                  fontFamily: 'inherit',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                }}
-              />
+              <WalletMultiButton style={WALLET_BUTTON_STYLE} />
             ) : (
               <button
                 onClick={handleAction}
