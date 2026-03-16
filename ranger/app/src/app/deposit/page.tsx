@@ -233,9 +233,11 @@ export default function DepositPage() {
       : parsedAmount <= userSharesInEurc);
 
   const canSubmit = connected && isVaultLive && isAmountValid && txState.status !== 'pending';
+  const submittingRef = useRef(false);
 
   const handleAction = useCallback(async () => {
-    if (!canSubmit || !publicKey) return;
+    if (submittingRef.current || !canSubmit || !publicKey) return;
+    submittingRef.current = true;
 
     setTxState({ status: 'pending' });
 
@@ -281,7 +283,11 @@ export default function DepositPage() {
         });
       } else {
         // Withdraw: amount is EURC, convert to LP shares
-        const lpAtoms = new BN(Math.floor((withdrawPreview ?? 0) * EURC_PRECISION));
+        if (!withdrawPreview || withdrawPreview <= 0) {
+          setTxState({ status: 'error', message: 'Could not compute share amount. Please try again.' });
+          return;
+        }
+        const lpAtoms = new BN(Math.floor(withdrawPreview * EURC_PRECISION));
         ix = await client.createWithdrawVaultIx(
           { amount: lpAtoms, isAmountInLp: true, isWithdrawAll: false },
           {
@@ -294,7 +300,10 @@ export default function DepositPage() {
       }
 
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      const tx    = new Transaction().add(...setupIxs, ix);
+      const tx = new Transaction();
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = publicKey;
+      tx.add(...setupIxs, ix);
       const txSig = await sendTransaction(tx, connection, { skipPreflight: false });
       await connection.confirmTransaction(
         { signature: txSig, blockhash, lastValidBlockHeight },
@@ -315,8 +324,10 @@ export default function DepositPage() {
       const message = parseUserError(err);
       setTxState({ status: 'error', message });
       toast(message, { type: 'error', title: 'Transaction Failed' });
+    } finally {
+      submittingRef.current = false;
     }
-  }, [canSubmit, publicKey, parsedAmount, tab, isVaultLive, connection, sendTransaction, withdrawPreview]);
+  }, [canSubmit, publicKey, parsedAmount, tab, isVaultLive, connection, sendTransaction, withdrawPreview, toast]);
 
 
   return (
