@@ -10,6 +10,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
+import { Footer } from '@/components/layout/Footer';
 import { useActivityFeed } from '@/hooks/useActivityFeed';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { PROTOCOL_META, explorerTxUrl } from '@/lib/constants';
@@ -245,6 +246,7 @@ export default function ActivityPage() {
           )}
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

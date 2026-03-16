@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { TrendingUp, ArrowRightLeft, Layers, Activity } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
+import { Footer } from '@/components/layout/Footer';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { ApyTrendChart } from '@/components/analytics/ApyTrendChart';
 import { CumulativeYieldChart } from '@/components/analytics/CumulativeYieldChart';
@@ -103,6 +104,7 @@ export default function AnalyticsPage() {
           <EarningsCalculator metrics={metrics} />
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { Navbar } from '@/components/layout/Navbar';
+import { Footer } from '@/components/layout/Footer';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useRangerRates } from '@/hooks/useRangerRates';
 import { PROTOCOL_META } from '@/lib/constants';
@@ -864,6 +865,7 @@ export default function SimulatorPage() {
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

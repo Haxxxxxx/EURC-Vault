@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
+import { Footer } from '@/components/layout/Footer';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { formatTvl } from '@/lib/format';
 import { RateComparison } from '@/components/dashboard/RateComparison';
@@ -89,6 +90,7 @@ export default function DashboardPage() {
         {/* Full-width: Rebalance history */}
         <RebalanceHistory history={history} loading={historyLoading} />
       </main>
+      <Footer />
     </div>
   );
 }

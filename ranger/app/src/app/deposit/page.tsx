@@ -27,6 +27,7 @@ import {
   createAssociatedTokenAccountInstruction,
 } from '@solana/spl-token';
 import { Navbar } from '@/components/layout/Navbar';
+import { Footer } from '@/components/layout/Footer';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useRangerMetrics } from '@/hooks/useRangerMetrics';
 import { useVaultState } from '@/hooks/useVaultState';
@@ -607,6 +608,7 @@ export default function DepositPage() {
         )}
 
       </main>
+      <Footer />
     </div>
   );
 }

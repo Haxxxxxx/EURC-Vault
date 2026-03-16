@@ -320,10 +320,11 @@
 
 .dark .skeleton-shimmer {
   background: linear-gradient(
-    90deg,
+    100deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.06) 40%,
-    rgba(255, 255, 255, 0.06) 60%,
+    rgba(255, 255, 255, 0.04) 30%,
+    rgba(255, 255, 255, 0.10) 50%,
+    rgba(255, 255, 255, 0.04) 70%,
     transparent 100%
   );
 }
