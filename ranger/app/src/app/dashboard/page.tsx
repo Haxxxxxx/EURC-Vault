@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
 import { usePageTitle } from '@/hooks/usePageTitle';
+import { formatTvl } from '@/lib/format';
 import { RateComparison } from '@/components/dashboard/RateComparison';
 import { ApyBreakdown } from '@/components/dashboard/ApyBreakdown';
 import { AllocationChart } from '@/components/dashboard/AllocationChart';
@@ -60,7 +61,7 @@ export default function DashboardPage() {
               { label: 'Blended APY',  value: `${metrics.currentApyPct.toFixed(2)}%`,  accent: 'text-emerald-400' },
               { label: 'Rate Spread',  value: `${metrics.spreadBps} bps`,               accent: metrics.spreadBps >= 50 ? 'text-emerald-400' : 'text-muted-foreground' },
               { label: 'Health Score', value: `${metrics.healthScore}/100`,              accent: metrics.healthScore >= 80 ? 'text-emerald-400' : metrics.healthScore >= 60 ? 'text-yellow-400' : 'text-red-400' },
-              { label: 'TVL',          value: metrics.tvlEurc >= 1_000 ? `€${(metrics.tvlEurc / 1_000).toFixed(1)}K` : `€${metrics.tvlEurc}`, accent: 'text-foreground' },
+              { label: 'TVL',          value: formatTvl(metrics.tvlEurc), accent: 'text-foreground' },
             ].map((stat) => (
               <div key={stat.label} className="rounded-xl border border-border bg-card px-4 py-3">
                 <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{stat.label}</p>

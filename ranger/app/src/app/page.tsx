@@ -11,6 +11,7 @@ import { useRangerRates } from '@/hooks/useRangerRates';
 import { useRangerMetrics } from '@/hooks/useRangerMetrics';
 import { useToast } from '@/components/ui/Toast';
 import { PROTOCOL_META, REBALANCE_MIN_SPREAD_BPS } from '@/lib/constants';
+import { formatTvl } from '@/lib/format';
 import { clsx } from 'clsx';
 
 function StatCard({
@@ -120,12 +121,6 @@ export default function HomePage() {
   const bestProtocol = rates?.best ?? null;
   const spreadBps = rates?.spreadBps ?? metrics?.spreadBps ?? null;
   const healthScore = metrics?.healthScore ?? null;
-
-  function formatTvl(tvl: number): string {
-    if (tvl >= 1_000_000) return `€${(tvl / 1_000_000).toFixed(2)}M`;
-    if (tvl >= 1_000) return `€${(tvl / 1_000).toFixed(1)}K`;
-    return `€${tvl.toFixed(0)}`;
-  }
 
   return (
     <div className="min-h-screen bg-background">
