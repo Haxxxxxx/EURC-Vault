@@ -9,10 +9,10 @@
 | # | Deliverable | Status | Notes |
 |---|-------------|--------|-------|
 | 1 | Demo/Pitch Video (max 3 min) | NOT STARTED | Record with Loom or OBS |
-| 2 | Strategy Documentation | DONE | `ranger/docs/strategy.md`, `risk-management.md` |
-| 3 | Code Repository | NEEDS PUSH | Branch `feature/ranger-hackathon` ready, no remote set |
+| 2 | Strategy Documentation | DONE | `ranger/docs/strategy.md`, `risk-management.md` — updated with 10% minimum thesis |
+| 3 | Code Repository | DONE | https://github.com/Haxxxxxx/EURC-Vault (`feature/ranger-hackathon` branch) |
 | 4 | On-chain Verification | BLOCKED | Voltr program is mainnet-only, devnet wallets funded |
-| 5 | SUBMISSION.md | NEEDS POLISH | Team name, GitHub URL, video link are placeholders |
+| 5 | SUBMISSION.md | PARTIAL | GitHub URL + Live Demo filled in. Team name + video link still TODO |
 
 ---
 
@@ -26,7 +26,7 @@
 **Current score: 8/10**
 - Strong thesis grounded in real market dynamics
 - Clear parameters (50bps trigger, 70% max concentration, 30min cooldown)
-- Target APY 12-15% is ambitious but argued with real rate data
+- Target APY 12-15% (active markets), 10% minimum — argued with historical rate data
 
 **To improve**:
 - [ ] Add a real rate snapshot showing actual divergence (screenshot from Drift/Kamino/Save dashboards)
@@ -150,7 +150,7 @@
 - Show test output: "82 unit tests covering rate edge cases, risk scenarios, and allocation math"
 
 ### Close (2:50-3:00)
-"EURC Cross-Protocol Yield Optimizer — automated rate arbitrage on Ranger Earn. 12-15% APY target, 82 tests, production-ready architecture."
+"EURC Cross-Protocol Yield Optimizer — automated rate arbitrage on Ranger Earn. 10%+ net APY target during active markets, 82 tests, production-ready architecture."
 
 ---
 
@@ -184,36 +184,39 @@ The Voltr vault program is **mainnet-only** — devnet deployment is impossible.
 
 ### Current State
 - All code on `feature/ranger-hackathon` branch
-- 9 commits with conventional messages
-- No remote configured
+- Remote configured: https://github.com/Haxxxxxx/EURC-Vault
+- Pushed and live
 
 ### Before Submission
-- [ ] Create GitHub repo (public, named `eurc-yield-optimizer` or keep `EURC-Vault`)
-- [ ] Add remote: `git remote add origin <url>`
-- [ ] Push: `git push -u origin feature/ranger-hackathon`
+- [x] Create GitHub repo — DONE (`EURC-Vault`)
+- [x] Push to remote — DONE
+- [x] Update SUBMISSION.md with repo URL — DONE
 - [ ] Consider: merge to main or submit as feature branch?
 - [ ] Add `@jakeyvee` as collaborator (if private repo)
-- [ ] Update SUBMISSION.md with repo URL
 
 ---
 
 ## Remaining Work — Priority Order
 
+### Completed
+1. **Push to GitHub** — DONE: https://github.com/Haxxxxxx/EURC-Vault
+2. **Deploy** — DONE: https://eurc-vault.web.app (Firebase Hosting, static export)
+3. **SUBMISSION.md** — DONE: GitHub URL and live demo URL filled in
+
 ### Must Do (Before April 6)
-1. **Push to GitHub** — Create repo, push branch
-2. **Demo video** — Record 3-minute Loom walkthrough
-3. **SUBMISSION.md** — Fill in team name, GitHub URL, video link
-4. **Fresh clone test** — Verify `npm install && npm run dev` works from scratch
+4. **Demo video** — Record 3-minute Loom walkthrough (see script below)
+5. **Team info** — Fill in team name and members in SUBMISSION.md
+6. **On-chain verification** — Attempt mainnet vault deployment or document the gap (Voltr is mainnet-only)
+7. **Fresh clone test** — Verify `npm install && npm run dev` works from scratch
 
 ### Should Do (High Impact)
-5. **Deploy to Vercel** — Live demo URL for judges
-6. **Wire Firebase** — Deploy Cloud Functions for real-time historical data
-7. **Mainnet vault deployment** — If possible (Voltr is mainnet-only)
+8. **Wire Firebase** — Deploy Cloud Functions for real-time historical data
+9. **Strategy doc review** — Ensure 10% minimum APY thesis is compelling with historical rate data
 
 ### Nice to Have (If Time)
-8. **Bundle optimization** — Lazy load Recharts on heavy pages
-9. **Lighthouse audit** — Performance, accessibility, SEO scores
-10. **README cleanup** — Add screenshots of each page
+10. **Bundle optimization** — Lazy load Recharts on heavy pages
+11. **Lighthouse audit** — Performance, accessibility, SEO scores
+12. **README cleanup** — Add screenshots of each page
 
 ---
 
@@ -250,13 +253,14 @@ The Voltr vault program is **mainnet-only** — devnet deployment is impossible.
 
 | Date | Task |
 |------|------|
-| Mar 13 (Today) | Sprint 4 fixes (Ralph), push to GitHub |
-| Mar 14-15 | Frontend polish (favicon, branding, mock data refresh, tooltips) |
-| Mar 16-20 | Wire Firebase live data (even partial), test all flows |
+| Mar 13 | Sprint 4 fixes, push to GitHub — DONE |
+| Mar 14-15 | Frontend polish, deploy to Firebase Hosting — DONE |
+| Mar 16 (Today) | Strategy docs updated with 10% minimum APY thesis |
+| Mar 17-20 | Wire Firebase live data (even partial), test all flows |
 | Mar 21-30 | Record demo video, iterate on presentation |
-| Apr 1-5 | Final polish, review SUBMISSION.md, test fresh clone setup |
+| Apr 1-5 | Final polish, team info, on-chain verification, test fresh clone |
 | Apr 6 | SUBMIT before 23:59 UTC |
 
 ---
 
-_Last updated: March 13, 2026_
+_Last updated: March 16, 2026_
