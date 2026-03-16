@@ -1,6 +1,7 @@
 /** Format a timestamp as relative time (e.g., "just now", "5m ago", "2h ago", "3d ago") */
 export function timeAgo(timestamp: number): string {
   const diff = Date.now() - timestamp;
+  if (diff <= 0) return 'just now';
   const seconds = Math.floor(diff / 1000);
   if (seconds < 10) return 'just now';
   if (seconds < 60) return `${seconds}s ago`;
@@ -13,9 +14,10 @@ export function timeAgo(timestamp: number): string {
 
 /** Format EURC amount with K/M suffix */
 export function formatTvl(v: number): string {
-  if (v >= 1_000_000) return `€${(v / 1_000_000).toFixed(2)}M`;
-  if (v >= 1_000) return `€${(v / 1_000).toFixed(1)}K`;
-  return `€${v.toFixed(0)}`;
+  const val = Math.max(0, v);
+  if (val >= 1_000_000) return `€${(val / 1_000_000).toFixed(2)}M`;
+  if (val >= 1_000) return `€${(val / 1_000).toFixed(1)}K`;
+  return `€${val.toFixed(0)}`;
 }
 
 /** Format EURC amount without symbol */

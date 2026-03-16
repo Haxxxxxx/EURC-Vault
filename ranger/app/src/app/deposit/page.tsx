@@ -112,6 +112,7 @@ function AmountInput({
           min="0"
           step="0.01"
           placeholder="0.00"
+          aria-label={label}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className="flex-1 bg-transparent text-2xl font-bold text-foreground placeholder-muted-foreground/40 outline-none tabular-nums"
@@ -247,20 +248,22 @@ export default function DepositPage() {
       const client      = new VoltrClient(connection);
       const vaultPubkey = new PublicKey(VAULT_ADDRESS);
 
-      // Ensure user's EURC token account exists (create if missing)
+      // Ensure user's EURC and pbEURC token accounts exist (create if missing)
       const setupIxs: import('@solana/web3.js').TransactionInstruction[] = [];
-      const userEurcAta = await getAssociatedTokenAddress(EURC_MINT, publicKey);
-      const eurcAtaInfo = await connection.getAccountInfo(userEurcAta);
+      const { vaultLpMint } = await client.findVaultAddresses(vaultPubkey);
+      const [userEurcAta, userLpAta] = await Promise.all([
+        getAssociatedTokenAddress(EURC_MINT, publicKey),
+        getAssociatedTokenAddress(vaultLpMint, publicKey),
+      ]);
+      const [eurcAtaInfo, lpAtaInfo] = await Promise.all([
+        connection.getAccountInfo(userEurcAta),
+        connection.getAccountInfo(userLpAta),
+      ]);
       if (!eurcAtaInfo) {
         setupIxs.push(
           createAssociatedTokenAccountInstruction(publicKey, userEurcAta, publicKey, EURC_MINT),
         );
       }
-
-      // Ensure user's LP (pbEURC) token account exists
-      const { vaultLpMint } = await client.findVaultAddresses(vaultPubkey);
-      const userLpAta = await getAssociatedTokenAddress(vaultLpMint, publicKey);
-      const lpAtaInfo = await connection.getAccountInfo(userLpAta);
       if (!lpAtaInfo) {
         setupIxs.push(
           createAssociatedTokenAccountInstruction(publicKey, userLpAta, publicKey, vaultLpMint),
@@ -578,7 +581,7 @@ export default function DepositPage() {
               <div>
                 <p className="text-xs text-muted-foreground">Yield Earned</p>
                 <p className="text-base font-semibold tabular-nums text-emerald-400">
-                  +€{((exchangeRate - 1) * userShares).toFixed(2)}
+                  +€{Math.max(0, (exchangeRate - 1) * userShares).toFixed(2)}
                 </p>
               </div>
             </div>

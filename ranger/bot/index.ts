@@ -29,8 +29,7 @@ import { assessRisk }           from './engine/risk.js';
 import * as cb                  from './engine/circuit-breaker.js';
 import { runCompound, shouldCompound, setLastRecordedTvl } from './engine/compounder.js';
 import { fetchVaultState } from './engine/vault-reader.js';
-import { generateSnapshot }     from './monitoring/metrics.js';
-import { recordRebalanceEvent, recordCompoundEvent } from './monitoring/metrics.js';
+import { generateSnapshot, recordRebalanceEvent, recordCompoundEvent } from './monitoring/metrics.js';
 import { sendAlert, alertRiskWarning } from './monitoring/alerts.js';
 import logger                   from './monitoring/logger.js';
 
@@ -111,8 +110,12 @@ async function rebalanceTask(connection: Connection): Promise<void> {
       log.info('LIVE vault state — on-chain data active', {
         tvl: `${(vaultState.totalAssets / 1_000_000).toFixed(2)} EURC`,
       });
+    } else if (VAULT_ADDRESS) {
+      // Vault address is set but on-chain read failed — DON'T rebalance on synthetic data
+      log.error('Vault address configured but on-chain read FAILED — skipping rebalance to protect funds');
+      return;
     } else {
-      log.warn('SIMULATED vault state — decisions based on synthetic data');
+      log.warn('SIMULATED vault state — no vault address configured');
     }
 
     cb.updatePeakTvl(vaultState.totalAssets);
@@ -164,6 +167,12 @@ async function rebalanceTask(connection: Connection): Promise<void> {
 async function compoundTask(connection: Connection): Promise<void> {
   if (!cachedRates) return;
   if (cb.isTripped()) return;
+
+  // Same stale-rate guard as rebalanceTask — don't compound on stale/mock data
+  if (hasStaleRates(cachedRates) || (['drift', 'kamino', 'save'] as const).some((p) => cachedRates![p].isStale)) {
+    log.warn('Stale rates detected — skipping compound');
+    return;
+  }
 
   try {
     const vaultState = await getVaultState(connection);
