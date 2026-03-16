@@ -115,7 +115,7 @@ async function sendWithRetry(
 ): Promise<string> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     // Fresh blockhash on every attempt — avoids expired-blockhash rejections
-    const tx = await buildAndSign(connection, manager, instructions);
+    const { tx, blockhash, lastValidBlockHeight } = await buildAndSign(connection, manager, instructions);
     try {
       const sig = await connection.sendTransaction(tx, {
         skipPreflight:       false,
@@ -125,7 +125,8 @@ async function sendWithRetry(
 
       log.debug('Transaction sent', { sig, attempt });
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      // Use the SAME blockhash from buildAndSign for confirmation —
+      // fetching a new one here could report an incorrect validity window.
       const result = await connection.confirmTransaction(
         { signature: sig, blockhash, lastValidBlockHeight },
         'confirmed',
@@ -150,13 +151,13 @@ async function buildAndSign(
   connection: Connection,
   manager: Keypair,
   instructions: TransactionInstruction[],
-): Promise<VersionedTransaction> {
+): Promise<{ tx: VersionedTransaction; blockhash: string; lastValidBlockHeight: number }> {
   const computeBudget = ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNIT_LIMIT });
   const priorityFee   = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: PRIORITY_FEE_MICRO_LAMPORTS });
 
   const allIxs = [computeBudget, priorityFee, ...instructions];
 
-  const { blockhash } = await connection.getLatestBlockhash();
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
   const message = new TransactionMessage({
     payerKey:        manager.publicKey,
     recentBlockhash: blockhash,
@@ -165,7 +166,7 @@ async function buildAndSign(
 
   const tx = new VersionedTransaction(message);
   tx.sign([manager]);
-  return tx;
+  return { tx, blockhash, lastValidBlockHeight };
 }
 
 /** Resolve strategy address for a protocol — throws if not configured */

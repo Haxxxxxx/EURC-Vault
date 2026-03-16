@@ -53,6 +53,7 @@ function getMockVaultState(): VaultState {
     peakTvl:          100_000 * 1_000_000,
     lastRebalanceAt:  null,
     lastCompoundAt:   null,
+    isLive:           false,
   };
 }
 
@@ -105,6 +106,15 @@ async function rebalanceTask(connection: Connection): Promise<void> {
 
   try {
     const vaultState = await getVaultState(connection);
+
+    if (vaultState.isLive) {
+      log.info('LIVE vault state — on-chain data active', {
+        tvl: `${(vaultState.totalAssets / 1_000_000).toFixed(2)} EURC`,
+      });
+    } else {
+      log.warn('SIMULATED vault state — decisions based on synthetic data');
+    }
+
     cb.updatePeakTvl(vaultState.totalAssets);
 
     const ratesByProtocol: Record<ProtocolId, import('./types.js').ProtocolRate> = {

@@ -36,6 +36,8 @@ export interface VaultState {
   peakTvl: number;
   lastRebalanceAt: Date | null;
   lastCompoundAt: Date | null;
+  /** True when state was fetched from on-chain data; false for simulated/mock */
+  isLive?: boolean;
 }
 
 /** Per-protocol allocation expressed as fractions of TVL (must sum to 1) */

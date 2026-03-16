@@ -98,8 +98,9 @@ export async function fetchVaultState(
 
     return state;
   } catch (err) {
-    log.error('Failed to fetch vault state from chain', err);
-    throw err;
+    log.warn('⚠ Failed to fetch vault state from chain — falling back to SIMULATED state. '
+      + 'Bot decisions will use synthetic data until on-chain reads recover.', err);
+    return simulatedVaultState();
   }
 }
 

@@ -230,6 +230,8 @@ npm install && npm run dev
 # 4. Run the app: cd ranger/app && npm run dev
 ```
 
+- For mainnet deployment, see [`ranger/docs/DEPLOYMENT.md`](DEPLOYMENT.md)
+
 ### Run Tests
 ```bash
 cd ranger && npm test
