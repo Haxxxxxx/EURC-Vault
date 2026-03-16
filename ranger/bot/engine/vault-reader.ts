@@ -99,7 +99,7 @@ export async function fetchVaultState(
     return state;
   } catch (err) {
     log.warn('⚠ Failed to fetch vault state from chain — falling back to SIMULATED state. '
-      + 'Bot decisions will use synthetic data until on-chain reads recover.', err);
+      + 'Bot decisions will use synthetic data until on-chain reads recover.', err as Record<string, unknown>);
     return simulatedVaultState();
   }
 }

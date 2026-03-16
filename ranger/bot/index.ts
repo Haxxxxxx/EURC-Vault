@@ -98,7 +98,7 @@ async function rebalanceTask(connection: Connection): Promise<void> {
   }
 
   // Guard against any rate marked isStale (mock/fallback rates)
-  const staleProtocols = (['drift', 'kamino', 'save'] as const).filter((p) => cachedRates[p].isStale);
+  const staleProtocols = (['drift', 'kamino', 'save'] as const).filter((p) => cachedRates![p].isStale);
   if (staleProtocols.length > 0) {
     log.warn('Rate data includes stale/mock values — skipping rebalance', { stale: staleProtocols });
     return;
@@ -192,15 +192,26 @@ async function compoundTask(connection: Connection): Promise<void> {
         }
 
         // Real compound: withdraw from source, deposit to highest-rate protocol
-        const compoundDecision = {
-          shouldRebalance:      true,
-          lowestRateProtocol:   fromProtocol,
-          highestRateProtocol:  toProtocol,
-          withdrawAmount:       harvestedAmount,
-          spreadBps:            0,
-          currentBlendedApyPct: 0,
-          targetBlendedApyPct:  0,
-          estimatedGainBps:     0,
+        const totalAssets = vaultState.totalAssets / 1_000_000;
+        const compoundDecision: import('./types.js').RebalanceDecision = {
+          shouldRebalance:       true,
+          reason:                `Compound: harvest ${(harvestedAmount / 1_000_000).toFixed(2)} EURC from ${fromProtocol} → ${toProtocol}`,
+          lowestRateProtocol:    fromProtocol,
+          highestRateProtocol:   toProtocol,
+          spreadBps:             0,
+          estimatedGainAnnualized: 0,
+          currentAllocation: {
+            drift:  vaultState.driftAllocation / vaultState.totalAssets,
+            kamino: vaultState.kaminoAllocation / vaultState.totalAssets,
+            save:   vaultState.saveAllocation / vaultState.totalAssets,
+            idle:   vaultState.idleBalance / (totalAssets > 0 ? vaultState.totalAssets : 1),
+          },
+          targetAllocation: {
+            drift:  vaultState.driftAllocation / vaultState.totalAssets,
+            kamino: vaultState.kaminoAllocation / vaultState.totalAssets,
+            save:   vaultState.saveAllocation / vaultState.totalAssets,
+            idle:   vaultState.idleBalance / (totalAssets > 0 ? vaultState.totalAssets : 1),
+          },
         };
         const txSig = await executeRebalance(compoundDecision, vaultState, connection);
         log.info('Compound tx executed', {
@@ -270,11 +281,11 @@ async function metricsSnapTask(connection: Connection): Promise<void> {
         await db.collection('ranger_metrics').add(snapshot);
         log.debug('Metrics snapshot persisted to Firestore');
       } catch (fsErr) {
-        log.warn('Firestore write failed — metrics snapshot not persisted', fsErr);
+        log.warn('Firestore write failed — metrics snapshot not persisted', fsErr as Record<string, unknown>);
       }
     } else {
       log.debug('Metrics snapshot generated (Firestore not configured)', {
-        blendedApy: `${snapshot.currentApyPct?.toFixed(2) ?? 0}%`,
+        blendedApy: `${(snapshot.currentApy * 100).toFixed(2)}%`,
       });
     }
   } catch (err) {
